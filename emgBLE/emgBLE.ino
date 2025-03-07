@@ -1,9 +1,14 @@
 #include <Wire.h>
 #include "SparkFun_ADS122C04_ADC_Arduino_Library.h"
+#include <ArduinoBLE.h>
 
+BLEService emgService("19B10000-E8F2-537E-4F6C-D104768A1214");
+// Bluetooth® Low Energy EMG Data Characteristic
+BLEIntCharacteristic emgDataChar("19B10001-E8F2-537E-4F6C-D104768A1214", BLERead | BLENotify);
+int oldEMGData = 0;  // Last EMG data reading
 // TODO
 // - Communicate with ADS112 - ok
-// - Read EMG signal and plot
+// - Read EMG signal and plot - ok
 // - Transmit via BLE
 // - Receive BLE data using ESP32 dongle
 
@@ -57,18 +62,40 @@ void setup() {
     EMG_0x40_sensor.configureADCmode(ADS122C04_RAW_MODE);
     isADSConfigured = true;
   }
+
+  // Start BLE
+  if (!BLE.begin()) {
+    Serial.println("Starting BLE module failed!");
+  }
+  else
+  {
+     // Set BLE device properties
+    BLE.setLocalName("XIAO_BLE_EMG");
+    BLE.setAdvertisedService(emgService);
+
+    // Add characteristic to the service
+    emgService.addCharacteristic(emgDataChar);
+    BLE.addService(emgService);
+
+    // Start advertising
+    BLE.advertise();
+    Serial.println("BLE EMG Peripheral Started...");
+  }
 }
 
 void loop() {
+  static int32_t raw_EMG_0X40 = 0;
+  BLEDevice central = BLE.central();  // Listen for BLE connections
+
   if (isADSConfigured) {
     // Read raw ADC value
-    int32_t raw_EMG_0X40 = EMG_0x40_sensor.readRawVoltage();
+    raw_EMG_0X40 = EMG_0x40_sensor.readRawVoltage();
 
     // Apply Butterworth filter
     float filtered_EMG = butterworthFilter((float)raw_EMG_0X40);
 
     // Print filtered value
-    Serial.println(filtered_EMG);
+    // Serial.println(filtered_EMG);
   } else {
     Serial.println("ADC not configured.");
   }
@@ -84,6 +111,29 @@ void loop() {
     digitalWrite(LED1, ledState);
     digitalWrite(LED2, ledState);
     digitalWrite(LED_BUILTIN, ledState);
+  }
+
+  if (central) {
+    Serial.print("Connected to: ");
+    Serial.println(central.address());
+
+    // While the central is still connected to the peripheral:
+    if (central.connected()) 
+    {
+      
+        int emgData = (int) raw_EMG_0X40;  // Convert to integer
+        
+        if (emgData != oldEMGData) {  // Check if EMG data has changed
+          Serial.print("EMG Data: ");
+          Serial.println(emgData);
+          emgDataChar.writeValue(emgData);  // Update EMG data characteristic
+          oldEMGData = emgData;  // Save new EMG data for next comparison
+        }
+      delay(5);  // Sampling interval ~2000Hz
+    }
+
+    Serial.print("Disconnected from: ");
+    Serial.println(central.address());
   }
 }
 

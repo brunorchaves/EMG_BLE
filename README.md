@@ -32,3 +32,7 @@ To add support for the XIAO nRF52840 (Sense) board:
 This project uses a **1st-order Butterworth bandpass filter** with corner frequencies **70Hz - 400Hz** at **2000 Hz sample rate**.  
 To generate your own filter coefficients, use:  
 🔗 [Butterworth Code Generator](http://www.piclist.com/techref/uk/ac/york/cs/www-users/http/~fisher/mkfilter/trad.html)
+
+
+
+BLE: https://how2electronics.com/send-receive-data-to-mobile-app-with-xiao-ble-nrf52840-sense/
