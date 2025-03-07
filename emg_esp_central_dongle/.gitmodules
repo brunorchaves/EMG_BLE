@@ -1,0 +1,3 @@
+[submodule "Modules"]
+	path = Modules
+	url = git@ssh.dev.azure.com:v3/42WE/42WE%20-%20Engineering/42WE.Firmware.Modules
