@@ -1,21 +1,29 @@
-# EMG_BLE
+# **EMG_BLE**
 
-Codes for the emg ble project
+Codes for the EMG BLE project.
 
-Initial setup:
+## **Initial Setup**
 
-Step 1. Download and Install the latest version of Arduino IDE according to your operating system
-pir
+Follow these steps to set up your development environment:
 
-Step 2. Launch the Arduino application
+### **Step 1: Download and Install Arduino IDE**
+Download the latest version of the Arduino IDE according to your operating system:  
+🔗 [Arduino IDE Download](https://www.arduino.cc/en/software)
 
-Step 3. Add Seeed Studio XIAO nRF52840 (Sense) board package to your Arduino IDE
+### **Step 2: Launch the Arduino Application**
+Open the Arduino IDE after installation.
 
-Navigate to File > Preferences, and fill "Additional Boards Manager URLs" with the url below: https://files.seeedstudio.com/arduino/package_seeeduino_boards_index.json
+### **Step 3: Add Seeed Studio XIAO nRF52840 (Sense) Board Package**
+To add support for the XIAO nRF52840 (Sense) board:
 
+1. Navigate to **File** > **Preferences**.
+2. In the **"Additional Boards Manager URLs"** field, add the following URL:
+   ```
+   https://files.seeedstudio.com/arduino/package_seeeduino_boards_index.json
+   ```
+3. Click **OK** and restart the Arduino IDE if necessary.
 
-Useful links:
+## **Useful Links**
 
-Arduino IDE: https://www.arduino.cc/en/software
-
-XIAO WIKI: https://wiki.seeedstudio.com/XIAO_BLE/
+- 🔗 **XIAO BLE Wiki**: [Seeed Studio XIAO BLE Documentation](https://wiki.seeedstudio.com/XIAO_BLE/)
+- 🔗 **Arduino IDE**: [Download & Install](https://www.arduino.cc/en/software)
