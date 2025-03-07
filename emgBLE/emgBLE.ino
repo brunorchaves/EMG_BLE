@@ -1,12 +1,11 @@
 #include <Wire.h>
-#include "SparkFun_ADS122C04_ADC_Arduino_Library.h" 
+#include "SparkFun_ADS122C04_ADC_Arduino_Library.h"
 
-
-// TODO 
-// - Comunicate with ADS112 - ok
-// - Read emg signal and plot - 
+// TODO
+// - Communicate with ADS112 - ok
+// - Read EMG signal and plot
 // - Transmit via BLE
-// - Receive ble data using ESP32 dongle
+// - Receive BLE data using ESP32 dongle
 
 #define ADDRESS_0X40  0x40
 SFE_ADS122C04 EMG_0x40_sensor(ADDRESS_0X40);
@@ -16,14 +15,33 @@ unsigned long previousMillis = 0;
 const long interval = 1000; // Interval for LED blinking (1 second)
 bool ledState = false; // Track LED state
 
-#define LED1  D7  // Define pin for LED 1
-#define LED2  D8  // Define pin for LED 2
-#define RSTPIN  D2 // Define pin for LED 2
+#define LED1  D7
+#define LED2  D8
+#define RSTPIN  D2
 
-void setup() 
-{
+// Butterworth Filter Parameters (mkfilter -Bu -Bp -o 1 -a 0.035 0.2 -l)
+#define NZEROS 2
+#define NPOLES 2
+#define GAIN   2.643255112e+000
+
+static float xv[NZEROS+1] = {0}, yv[NPOLES+1] = {0};
+
+// Butterworth Bandpass Filter (70Hz - 400Hz, Fs = 2000 Hz)
+float butterworthFilter(float input) {
+  xv[0] = xv[1]; xv[1] = xv[2];
+  xv[2] = input / GAIN;
+  
+  yv[0] = yv[1]; yv[1] = yv[2];
+  yv[2] = (xv[2] - xv[0])
+        + (-0.2735690431 * yv[0]) + (1.0844313730 * yv[1]);
+
+  return yv[2]; // Filtered signal output
+}
+
+void setup() {
   Serial.begin(115200);
-  Serial.println("Starting ADS122C04...");
+  Serial.println("Starting ADS112...");
+
   pinMode(RSTPIN, OUTPUT);
   pinMode(LED1, OUTPUT);
   pinMode(LED2, OUTPUT);
@@ -32,28 +50,26 @@ void setup()
 
   Wire.begin();
 
-  if (!EMG_0x40_sensor.begin(ADDRESS_0X40)) 
-  {
-    Serial.println("ERROR: ADS122C04 not detected! Check wiring.");
-  } 
-  else 
-  {
-    Serial.println("ADS122C04 detected at I2C 0x40.");
-    EMG_0x40_sensor.configureADCmode(ADS122C04_RAW_MODE); // Configure for raw mode
+  if (!EMG_0x40_sensor.begin(ADDRESS_0X40)) {
+    Serial.println("ERROR: ADS112 not detected! Check wiring.");
+  } else {
+    Serial.println("ADS112 detected at I2C 0x40.");
+    EMG_0x40_sensor.configureADCmode(ADS122C04_RAW_MODE);
     isADSConfigured = true;
   }
 }
 
 void loop() {
-  if (isADSConfigured) 
-  {
-    Serial.println("Reading voltage...");
+  if (isADSConfigured) {
+    // Read raw ADC value
     int32_t raw_EMG_0X40 = EMG_0x40_sensor.readRawVoltage();
-    Serial.print("Raw Voltage: ");
-    Serial.println(raw_EMG_0X40);
-  } 
-  else 
-  {
+
+    // Apply Butterworth filter
+    float filtered_EMG = butterworthFilter((float)raw_EMG_0X40);
+
+    // Print filtered value
+    Serial.println(filtered_EMG);
+  } else {
     Serial.println("ADC not configured.");
   }
 
@@ -70,3 +86,5 @@ void loop() {
     digitalWrite(LED_BUILTIN, ledState);
   }
 }
+
+

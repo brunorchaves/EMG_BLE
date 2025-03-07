@@ -208,7 +208,7 @@ bool SFE_ADS122C04::configureADCmode(uint8_t wire_mode, uint8_t rate)
     initParams.dataRate = ADS122C04_DATA_RATE_1000SPS; // Set the data rate (samples per second). Defaults to 20
     initParams.opMode = ADS122C04_OP_MODE_TURBO; // Disable turbo mode
     initParams.convMode = ADS122C04_CONVERSION_MODE_SINGLE_SHOT; // Use single shot mode
-    initParams.selectVref = ADS122C04_VREF_AVDD; // Use the internal 2.048V reference
+    initParams.selectVref = ADS122C04_VREF_AVDD; // Use the internal AVDD reference
     initParams.tempSensorEn = ADS122C04_TEMP_SENSOR_OFF; // Disable the temperature sensor
     initParams.dataCounterEn = ADS122C04_DCNT_DISABLE; // Disable the data counter
     initParams.dataCRCen = ADS122C04_CRC_DISABLED; // Disable CRC checking
@@ -444,12 +444,13 @@ int32_t SFE_ADS122C04::readRawVoltage(uint8_t rate)
     }
   }
 
-  // The raw voltage is in the bottom 24 bits of raw_temp
-  // If we just do a <<8 we will multiply the result by 256
-  // Instead pad out the MSB with the MS bit of the 24 bits
-  // to preserve the two's complement
-  if ((raw_v.UINT32 & 0x00800000) == 0x00800000)
-    raw_v.UINT32 |= 0xFF000000;
+  // The raw voltage is in the bottom 16 bits of raw_temp
+  // We need to properly sign-extend it to a 32-bit integer
+  if ((raw_v.UINT32 & 0x00008000) == 0x00008000) // Check if the sign bit (bit 15) is set
+    raw_v.UINT32 |= 0xFFFF0000; // Sign-extend to 32 bits
+  else
+    raw_v.UINT32 &= 0x0000FFFF; // Ensure upper bits are cleared
+
   return(raw_v.INT32);
 }
 
