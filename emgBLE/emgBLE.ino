@@ -122,14 +122,11 @@ void loop() {
     {
       
         int emgData = (int) raw_EMG_0X40;  // Convert to integer
+        Serial.print("EMG Data: ");
+        Serial.println(emgData);
+        emgDataChar.writeValue(emgData);  // Update EMG data characteristic
+        oldEMGData = emgData;  // Save new EMG data for next comparison
         
-        if (emgData != oldEMGData) {  // Check if EMG data has changed
-          Serial.print("EMG Data: ");
-          Serial.println(emgData);
-          emgDataChar.writeValue(emgData);  // Update EMG data characteristic
-          oldEMGData = emgData;  // Save new EMG data for next comparison
-        }
-      delay(5);  // Sampling interval ~2000Hz
     }
 
     Serial.print("Disconnected from: ");
