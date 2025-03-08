@@ -12,6 +12,7 @@
 #include "esp_gatt_common_api.h"
 #include "esp_log.h"
 #include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
 
 #define GATTC_TAG "GATTC_DEMO"
 #define REMOTE_SERVICE_UUID        0x00FF
@@ -33,12 +34,18 @@ static esp_gattc_descr_elem_t *descr_elem_result = NULL;
 
 static esp_bt_uuid_t remote_filter_service_uuid = {
     .len = ESP_UUID_LEN_128,
-    .uuid = {.uuid128 = {0x14, 0x12, 0x76, 0x04, 0xD1, 0x6C, 0x4F, 0x7E, 0x53, 0xF2, 0xE8, 0x00, 0x00, 0xB1, 0x19, 0x00}},
+    .uuid = {.uuid128 = {
+        0x14, 0x12, 0x8A, 0x76, 0x04, 0xD1, 0x6C, 0x4F,
+        0x7E, 0x53, 0xF2, 0xE8, 0x00, 0x00, 0xB1, 0x19
+    }},
 };
 
 static esp_bt_uuid_t remote_filter_char_uuid = {
     .len = ESP_UUID_LEN_128,
-    .uuid = {.uuid128 = {0x14, 0x12, 0x76, 0x04, 0xD1, 0x6C, 0x4F, 0x7E, 0x53, 0xF2, 0xE8, 0x01, 0x00, 0xB1, 0x19, 0x00}},
+    .uuid = {.uuid128 = {
+        0x14, 0x12, 0x8A, 0x76, 0x04, 0xD1, 0x6C, 0x4F,
+        0x7E, 0x53, 0xF2, 0xE8, 0x01, 0x00, 0xB1, 0x19
+    }},
 };
 
 static esp_bt_uuid_t notify_descr_uuid = {
@@ -117,12 +124,12 @@ static void gattc_profile_event_handler(esp_gattc_cb_event_t event, esp_gatt_if_
     case ESP_GATTC_SEARCH_RES_EVT: {
         ESP_LOGI(GATTC_TAG, "Service search result, conn_id = %x, is primary service %d", p_data->search_res.conn_id, p_data->search_res.is_primary);
         ESP_LOGI(GATTC_TAG, "start handle %d, end handle %d, current handle value %d", p_data->search_res.start_handle, p_data->search_res.end_handle, p_data->search_res.srvc_id.inst_id);
-        if (p_data->search_res.srvc_id.uuid.len == ESP_UUID_LEN_16 && p_data->search_res.srvc_id.uuid.uuid.uuid16 == REMOTE_SERVICE_UUID) {
+        if (p_data->search_res.srvc_id.uuid.len == ESP_UUID_LEN_128 && memcmp(p_data->search_res.srvc_id.uuid.uuid.uuid128, remote_filter_service_uuid.uuid.uuid128, ESP_UUID_LEN_128) == 0) {
             ESP_LOGI(GATTC_TAG, "Service found");
             get_server = true;
             gl_profile_tab[PROFILE_A_APP_ID].service_start_handle = p_data->search_res.start_handle;
             gl_profile_tab[PROFILE_A_APP_ID].service_end_handle = p_data->search_res.end_handle;
-            ESP_LOGI(GATTC_TAG, "UUID16: %x", p_data->search_res.srvc_id.uuid.uuid.uuid16);
+            ESP_LOG_BUFFER_HEX(GATTC_TAG, p_data->search_res.srvc_id.uuid.uuid.uuid128, ESP_UUID_LEN_128);
         }
         break;
     }
@@ -510,24 +517,4 @@ void app_main(void)
     if (local_mtu_ret){
         ESP_LOGE(GATTC_TAG, "set local  MTU failed, error code = %x", local_mtu_ret);
     }
-
-
-    /*
-    * This code is intended for debugging and prints all HCI data.
-    * To enable it, turn on the "BT_HCI_LOG_DEBUG_EN" configuration option.
-    * The output HCI data can be parsed using the script:
-    * esp-idf/tools/bt/bt_hci_to_btsnoop.py.
-    * For detailed instructions, refer to esp-idf/tools/bt/README.md.
-    */
-
-    /*
-    while (1) {
-        extern void bt_hci_log_hci_data_show(void);
-        extern void bt_hci_log_hci_adv_show(void);
-        bt_hci_log_hci_data_show();
-        bt_hci_log_hci_adv_show();
-        vTaskDelay(1000 / portTICK_PERIOD_MS);
-    }
-    */
-
 }
