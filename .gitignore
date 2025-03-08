@@ -1,2 +1,2 @@
 # Ignore build folder inside gatta_client
-gatt_client/build/
+esp_dongle_ble/build/
