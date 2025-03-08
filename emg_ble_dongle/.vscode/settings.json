@@ -11,7 +11,10 @@
         "nvs_flash.h": "c",
         "esp_bt_main.h": "c",
         "esp_gap_ble_api.h": "c",
-        "esp_bt.h": "c"
+        "esp_bt.h": "c",
+        "freertos.h": "c",
+        "esp_gatt_defs.h": "c",
+        "esp_gattc_api.h": "c"
     },
     "idf.flashType": "UART",
     "idf.customExtraVars": {
