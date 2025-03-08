@@ -258,10 +258,15 @@ static void gattc_profile_event_handler(esp_gattc_cb_event_t event, esp_gatt_if_
     case ESP_GATTC_NOTIFY_EVT:
         if (p_data->notify.is_notify){
             ESP_LOGI(GATTC_TAG, "Notification received");
+            if (p_data->notify.is_notify) {
+                uint16_t value = (p_data->notify.value[1] << 8) | p_data->notify.value[0]; // Little-endian
+                printf("%d\n", value);
+            }
         }else{
             ESP_LOGI(GATTC_TAG, "Indication received");
         }
         ESP_LOG_BUFFER_HEX(GATTC_TAG, p_data->notify.value, p_data->notify.value_len);
+        
         break;
     case ESP_GATTC_WRITE_DESCR_EVT:
         if (p_data->write.status != ESP_GATT_OK){
@@ -442,6 +447,7 @@ static void esp_gattc_cb(esp_gattc_cb_event_t event, esp_gatt_if_t gattc_if, esp
 
 void app_main(void)
 {
+    esp_log_level_set(GATTC_TAG, ESP_LOG_NONE);
     // Initialize NVS.
     esp_err_t ret = nvs_flash_init();
     if (ret == ESP_ERR_NVS_NO_FREE_PAGES || ret == ESP_ERR_NVS_NEW_VERSION_FOUND) {
