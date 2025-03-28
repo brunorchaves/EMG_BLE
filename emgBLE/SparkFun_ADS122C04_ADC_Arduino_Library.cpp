@@ -202,12 +202,12 @@ bool SFE_ADS122C04::configureADCmode(uint8_t wire_mode, uint8_t rate)
   }
   else if (wire_mode == ADS122C04_RAW_MODE) // Raw mode : disable the IDAC and use the internal reference
   {
-    initParams.inputMux = ADS122C04_MUX_AIN0_AIN1; // Route AIN0 to AINP and AVSS to AINN
+    initParams.inputMux = ADS122C04_MUX_AIN0_AVSS; // Route AIN0 to AINP and AVSS to AINN
     initParams.gainLevel = ADS122C04_GAIN_1; // Set the gain to 1
     initParams.pgaBypass = ADS122C04_PGA_DISABLED;
     initParams.dataRate = ADS122C04_DATA_RATE_1000SPS; // Set the data rate (samples per second). Defaults to 20
     initParams.opMode = ADS122C04_OP_MODE_TURBO; // Disable turbo mode
-    initParams.convMode = ADS122C04_CONVERSION_MODE_SINGLE_SHOT; // Use single shot mode
+    initParams.convMode = ADS122C04_CONVERSION_MODE_CONTINUOUS; // Use single shot mode
     initParams.selectVref = ADS122C04_VREF_AVDD; // Use the internal AVDD reference
     initParams.tempSensorEn = ADS122C04_TEMP_SENSOR_OFF; // Disable the temperature sensor
     initParams.dataCounterEn = ADS122C04_DCNT_DISABLE; // Disable the data counter
@@ -295,7 +295,7 @@ float SFE_ADS122C04::readPT100Centigrade(void) // Read the temperature in Centig
   }
 
   // Read the conversion result
-  if(ADS122C04_getConversionData(&raw_v.UINT32) == false)
+  if(ADS122C04_getConversionData(&raw_v.INT16) == false)
   {
     if (_printDebug == true)
     {
@@ -372,86 +372,40 @@ float SFE_ADS122C04::readPT100Fahrenheit(void) // Read the temperature in Fahren
   return((readPT100Centigrade() * 1.8) + 32.0); // Read Centigrade and convert to Fahrenheit
 }
 
-// Read the raw signed 24-bit ADC value as int32_t
+// Read the raw signed 16-bit ADC value as int32_t
 // The result needs to be multiplied by VREF / GAIN to convert to Volts
-int32_t SFE_ADS122C04::readRawVoltage(uint8_t rate)
+// Read the raw 16-bit ADC value (signed)
+int16_t SFE_ADS122C04::readRawVoltage(uint8_t rate) 
 {
-  raw_voltage_union raw_v; // union to convert uint32_t to int32_t
-  unsigned long start_time = millis(); // Record the start time so we can timeout
-  bool drdy = false; // DRDY (1 == new data is ready)
-  uint8_t previousWireMode = _wireMode; // Record the previous wire mode so we can restore it
-  uint8_t previousRate = ADS122C04_Reg.reg1.bit.DR; // Record the previous rate so we can restore it
-  bool configChanged = (_wireMode != ADS122C04_RAW_MODE) || (previousRate != rate); // Only change the configuration if we need to
+  int16_t raw_v = 0;
+  unsigned long start_time = millis();
+  bool drdy = false;
 
-  // Configure the ADS122C04 for raw mode
-  // Disable the IDAC, use the internal 2.048V reference and set the gain to 1
-  if (configChanged)
-  {
-    if ((configureADCmode(ADS122C04_RAW_MODE, rate)) == false)
-    {
-      if (_printDebug == true)
-      {
-        _debugPort->println(F("readRawVoltage: configureADCmode (1) failed"));
-      }
-      return(0);
-    }
-  }
-
-  // Start the conversion (assumes we are using single shot mode)
+  // Start conversion (assumes single-shot mode)
   start();
 
-  // Wait for DRDY to go valid
-  while((drdy == false) && (millis() < (start_time + ADS122C04_CONVERSION_TIMEOUT)))
-  {
-    delay(1); // Don't pound the bus too hard
+  // Wait for DRDY
+  while (!drdy && (millis() < (start_time + ADS122C04_CONVERSION_TIMEOUT))) {
+    delay(1);
     drdy = checkDataReady();
   }
 
-  // Check if we timed out
-  if (drdy == false)
-  {
-    if (_printDebug == true)
-    {
+  if (!drdy) {
+    if (_printDebug) {
       _debugPort->println(F("readRawVoltage: checkDataReady timed out"));
     }
-    if (configChanged)
-      configureADCmode(previousWireMode, previousRate); // Attempt to restore the previous wire mode
-    return(0);
+    return 0;
   }
 
-  // Read the conversion result
-  if(ADS122C04_getConversionData(&raw_v.UINT32) == false)
-  {
-    if (_printDebug == true)
-    {
+  // Read the 16-bit conversion result
+  if (!ADS122C04_getConversionData(&raw_v)) {
+    if (_printDebug) {
       _debugPort->println(F("readRawVoltage: ADS122C04_getConversionData failed"));
     }
-    if (configChanged)
-      configureADCmode(previousWireMode, previousRate); // Attempt to restore the previous wire mode
-    return(0);
+    return 0;
   }
 
-  // Restore the previous wire mode
-  if (configChanged)
-  {
-    if ((configureADCmode(previousWireMode, previousRate)) == false)
-    {
-    if (_printDebug == true)
-      {
-        _debugPort->println(F("readRawVoltage: configureADCmode (2) failed"));
-      }
-      return(0);
-    }
-  }
-
-  // The raw voltage is in the bottom 16 bits of raw_temp
-  // We need to properly sign-extend it to a 32-bit integer
-  if ((raw_v.UINT32 & 0x00008000) == 0x00008000) // Check if the sign bit (bit 15) is set
-    raw_v.UINT32 |= 0xFFFF0000; // Sign-extend to 32 bits
-  else
-    raw_v.UINT32 &= 0x0000FFFF; // Ensure upper bits are cleared
-
-  return(raw_v.INT32);
+  return raw_v; // Signed 16-bit value
 }
 
 // Read the raw signed 24-bit ADC value as uint32_t
@@ -459,7 +413,7 @@ int32_t SFE_ADS122C04::readRawVoltage(uint8_t rate)
 // Higher functions will need to convert the result to (e.g.) int32_t
 uint32_t SFE_ADS122C04::readADC(void)
 {
-  uint32_t ret_val; // The return value
+  int16_t ret_val; // The return value
 
   // Read the conversion result
   if(ADS122C04_getConversionData(&ret_val) == false)
@@ -478,7 +432,7 @@ uint32_t SFE_ADS122C04::readADC(void)
 float SFE_ADS122C04::readInternalTemperature(uint8_t rate)
 {
   internal_temperature_union int_temp; // union to convert uint16_t to int16_t
-  uint32_t raw_temp; // The raw temperature from the ADC
+  int16_t raw_temp; // The raw temperature from the ADC
   unsigned long start_time = millis(); // Record the start time so we can timeout
   bool drdy = false; // DRDY (1 == new data is ready)
   float ret_val = 0.0; // The return value
@@ -1048,57 +1002,31 @@ bool SFE_ADS122C04::ADS122C04_getConversionDataWithCount(uint32_t *conversionDat
   return(true);
 }
 
-// Read the conversion result.
-// The conversion result is 24-bit two's complement (signed)
-// and is returned in the 24 lowest bits of the uint32_t conversionData.
-// Hence it will always appear positive.
-// Higher functions will need to take care of converting it to (e.g.) float or int32_t.
-bool SFE_ADS122C04::ADS122C04_getConversionData(uint32_t *conversionData)
-{
-  uint8_t RXByte[3] = {0};
+// Read the conversion result (16-bit)
+bool SFE_ADS122C04::ADS122C04_getConversionData(int16_t *conversionData) {
+  uint8_t RXByte[2] = {0};
 
   _i2cPort->beginTransmission((uint8_t)_deviceAddress);
   _i2cPort->write(ADS122C04_RDATA_CMD);
 
-  if (_i2cPort->endTransmission(false) != 0)    //Do not release bus
-  {
-    if (_printDebug == true)
-    {
+  if (_i2cPort->endTransmission(false) != 0) {
+    if (_printDebug) {
       _debugPort->println(F("ADS122C04_getConversionData: sensor did not ACK"));
     }
-    return(false); //Sensor did not ACK
+    return false;
   }
 
-  // Note: the next line will need to be changed if data integrity is enabled.
-  //       The code will need to request 5 bytes for CRC or 6 bytes for inverted data.
-  _i2cPort->requestFrom((uint8_t)_deviceAddress, (uint8_t)3); // Request three bytes
+  _i2cPort->requestFrom((uint8_t)_deviceAddress, (uint8_t)2); // Request 2 bytes (16-bit)
 
-  if (_i2cPort->available() >= 3)
-  {
+  if (_i2cPort->available() >= 2) {
     RXByte[0] = _i2cPort->read(); // MSB
-    RXByte[1] = _i2cPort->read();
-    RXByte[2] = _i2cPort->read(); // LSB
-    if (_i2cPort->available() > 0) // Note: this _should_ be redundant
-    {
-      if (_printDebug == true)
-      {
-        _debugPort->println(F("ADS122C04_getConversionData: excess bytes available. Maybe data integrity is enabled?"));
-      }
-      while (_i2cPort->available() > 0)
-      {
-        _i2cPort->read(); // Read and ignore excess bytes (presumably inverted data or CRC)
-      }
-    }
-  }
-  else
-  {
-    if (_printDebug == true)
-    {
+    RXByte[1] = _i2cPort->read(); // LSB
+    *conversionData = ((int16_t)RXByte[0] << 8) | RXByte[1]; // Combine into 16-bit signed
+    return true;
+  } else {
+    if (_printDebug) {
       _debugPort->println(F("ADS122C04_getConversionData: requestFrom failed"));
     }
-    return(false);
+    return false;
   }
-
-  *conversionData = ((uint32_t)RXByte[2]) | ((uint32_t)RXByte[1]<<8) | ((uint32_t)RXByte[0]<<16);
-  return(true);
 }

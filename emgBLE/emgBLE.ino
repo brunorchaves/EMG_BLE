@@ -63,36 +63,38 @@ void setup() {
     isADSConfigured = true;
   }
 
-  // Start BLE
-  if (!BLE.begin()) {
-    Serial.println("Starting BLE module failed!");
-  }
-  else
-  {
-     // Set BLE device properties
-    BLE.setLocalName("XIAO_BLE_EMG");
-    BLE.setAdvertisedService(emgService);
+  // // Start BLE
+  // if (!BLE.begin()) {
+  //   Serial.println("Starting BLE module failed!");
+  // }
+  // else
+  // {
+  //    // Set BLE device properties
+  //   BLE.setLocalName("XIAO_BLE_EMG");
+  //   BLE.setAdvertisedService(emgService);
 
-    // Add characteristic to the service
-    emgService.addCharacteristic(emgDataChar);
-    BLE.addService(emgService);
+  //   // Add characteristic to the service
+  //   emgService.addCharacteristic(emgDataChar);
+  //   BLE.addService(emgService);
 
-    // Start advertising
-    BLE.advertise();
-    Serial.println("BLE EMG Peripheral Started...");
-  }
+  //   // Start advertising
+  //   BLE.advertise();
+  //   Serial.println("BLE EMG Peripheral Started...");
+  // }
 }
 
 void loop() {
-  static int32_t raw_EMG_0X40 = 0;
-  BLEDevice central = BLE.central();  // Listen for BLE connections
+  static int16_t raw_EMG_0X40 = 0;
+  // BLEDevice central = BLE.central();  // Listen for BLE connections
 
   if (isADSConfigured) {
     // Read raw ADC value
     raw_EMG_0X40 = EMG_0x40_sensor.readRawVoltage();
-
+    
     // Apply Butterworth filter
-    float filtered_EMG = butterworthFilter((float)raw_EMG_0X40);
+    // float filtered_EMG = butterworthFilter((float)raw_EMG_0X40);
+    Serial.println(raw_EMG_0X40);
+
 
     // Print filtered value
     // Serial.println(filtered_EMG);
@@ -101,37 +103,39 @@ void loop() {
   }
 
   // Handle LED blinking using millis()
-  unsigned long currentMillis = millis();
-  if (currentMillis - previousMillis >= interval) {
-    previousMillis = currentMillis;
-    
-    // Toggle LED state
-    ledState = !ledState;
-    
-    digitalWrite(LED1, ledState);
-    digitalWrite(LED2, ledState);
-    digitalWrite(LED_BUILTIN, ledState);
+  if(isADSConfigured)
+  {
+    unsigned long currentMillis = millis();
+    if (currentMillis - previousMillis >= interval) {
+      previousMillis = currentMillis;
+      
+      // Toggle LED state
+      ledState = !ledState;
+      
+      digitalWrite(LED1, ledState);
+      digitalWrite(LED2, ledState);
+      digitalWrite(LED_BUILTIN, ledState);
+    }
   }
 
-  if (central) {
-    Serial.print("Connected to: ");
-    Serial.println(central.address());
+  // if (central) {
+    // Serial.print("Connected to: ");
+    // Serial.println(central.address());
 
     // While the central is still connected to the peripheral:
-    if (central.connected()) 
-    {
+    // if (central.connected()) 
+    // {
       
-        int emgData = (int) raw_EMG_0X40;  // Convert to integer
-        Serial.print("EMG Data: ");
-        Serial.println(emgData);
-        emgDataChar.writeValue(emgData);  // Update EMG data characteristic
-        oldEMGData = emgData;  // Save new EMG data for next comparison
+        // Serial.print("EMG Data: ");
         
-    }
+        // emgDataChar.writeValue(filtered_EMG);  // Update EMG data characteristic
+        // oldEMGData = emgData;  // Save new EMG data for next comparison
+        
+    // }
 
-    Serial.print("Disconnected from: ");
-    Serial.println(central.address());
-  }
+    // Serial.print("Disconnected from: ");
+    // Serial.println(central.address());
+  // }
 }
 
 

@@ -274,6 +274,7 @@ typedef struct ADS122C04Reg{
 // To simplify converting from uint16_t to int16_t
 // without using a cast
 union internal_temperature_union{
+  int32_t INT32;
   int16_t INT16;
   uint16_t UINT16;
 };
@@ -282,7 +283,8 @@ union internal_temperature_union{
 // To simplify converting from uint32_t to int32_t
 // without using a cast
 union raw_voltage_union{
-  int32_t INT32;
+  int16_t  INT16;
+  int32_t  INT32;   // Signed 16-bit representation
   uint32_t UINT32;
 };
 
@@ -324,7 +326,7 @@ public:
   // Read the raw signed 24-bit ADC value as int32_t
   // This uses the internal 2.048V reference with the gain set to 1
   // The LSB is 2.048 / 2^23 = 0.24414 uV (0.24414 microvolts)
-  int32_t readRawVoltage(uint8_t rate = ADS122C04_DATA_RATE_20SPS);
+  int16_t readRawVoltage(uint8_t rate = ADS122C04_DATA_RATE_20SPS);
 
   // Read the raw signed 24-bit ADC value as uint32_t
   // The ADC data is returned in the least-significant 24-bits
@@ -413,7 +415,7 @@ private:
   bool ADS122C04_writeReg(uint8_t reg, uint8_t writeValue); // write a value to the selected register
   bool ADS122C04_readReg(uint8_t reg, uint8_t *readValue); // read a value from the selected register (returned in readValue)
 
-  bool ADS122C04_getConversionData(uint32_t *conversionData); // read the raw 24-bit conversion result
+  bool ADS122C04_getConversionData(int16_t *conversionData); // read the raw 24-bit conversion result
   bool ADS122C04_getConversionDataWithCount(uint32_t *conversionData, uint8_t *count); // read the raw conversion result and count (if enabled)
 
   bool ADS122C04_sendCommand(uint8_t command); // write to the selected command register
