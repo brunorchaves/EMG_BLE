@@ -8,5 +8,8 @@
     },
     "idf.openOcdConfigs": [
         "board/esp32c3-bridge.cfg"
+    ],
+    "nrf-connect.applications": [
+        "${workspaceFolder}\\emg_nrf_sdk\\emg_ble"
     ]
 }
