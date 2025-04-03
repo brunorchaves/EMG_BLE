@@ -1,2 +1,3 @@
 # Ignore build folder inside gatta_client
 esp_dongle_ble/build/
+emg_nrf/build/
