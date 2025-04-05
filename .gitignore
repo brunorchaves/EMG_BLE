@@ -1,3 +1,5 @@
 # Ignore build folder inside gatta_client
 esp_dongle_ble/build/
 emg_nrf_sdk/emg_ble/build
+blinky/
+emg_nrf_sdk/build
