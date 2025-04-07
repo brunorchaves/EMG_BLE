@@ -70,6 +70,7 @@
       <file file_name="../../../../../../components/ble/ble_services/ble_lbs/ble_lbs.c" />
     </folder>
     <folder Name="nRF_Drivers">
+      <file file_name="../../../ADS112C04.c" />
       <file file_name="../../../../../../integration/nrfx/legacy/nrf_drv_clock.c" />
       <file file_name="../../../../../../integration/nrfx/legacy/nrf_drv_uart.c" />
       <file file_name="../../../../../../modules/nrfx/soc/nrfx_atomic.c" />

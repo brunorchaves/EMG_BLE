@@ -19,6 +19,7 @@
 "Output/Debug/Obj/ble_app_blinky_pca10056_s140/nrfx_twi.o"
 "Output/Debug/Obj/ble_app_blinky_pca10056_s140/nrfx_uart.o"
 "Output/Debug/Obj/ble_app_blinky_pca10056_s140/nrfx_uarte.o"
+"Output/Debug/Obj/ble_app_blinky_pca10056_s140/ADS112C04.o"
 "Output/Debug/Obj/ble_app_blinky_pca10056_s140/app_button.o"
 "Output/Debug/Obj/ble_app_blinky_pca10056_s140/app_error.o"
 "Output/Debug/Obj/ble_app_blinky_pca10056_s140/app_error_handler_gcc.o"

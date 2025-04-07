@@ -6,6 +6,7 @@
 #include "nrfx_twi.h"
 #include "nrf_gpio.h"
 #include "nrf_delay.h"
+#include "ADS112C04.h"
 
 // === Hardware Configuration ===
 #define LED_PIN        (32 + 13)  // P1.13
@@ -124,7 +125,6 @@ void check_ads1120(void) {
     uart_print("ADS1120 not detected at 0x40 or 0x41.\r\n");
 }
 
-// === Main ===
 int main(void) {
     led_init();
     gpio_init();
@@ -137,8 +137,35 @@ int main(void) {
     i2c_scan();  // One-time scan
     check_ads1120();
 
+    // === Initialize ADS112C04 ===
+    uart_print("Initializing ADS112C04...\r\n");
+    if (!ads122c04_init(&m_twi)) {
+        uart_print("Failed to reset ADS112C04.\r\n");
+        while (1); // Halt
+    }
+    uart_print("ADS112C04 reset successful.\r\n");
+
+    // === Configure ADS112C04 for raw mode ===
+    uart_print("Configuring ADS112C04 raw mode...\r\n");
+    if (!ads122c04_configure_raw_mode(&m_twi)) {
+        uart_print("Failed to configure ADS112C04.\r\n");
+        while (1); // Halt
+    }
+    uart_print("ADS112C04 configured.\r\n");
+
+    // === Continuous Data Reading Loop ===
     while (1) {
-        nrf_gpio_pin_toggle(LED_PIN);
-        nrf_delay_ms(1000);
+        int32_t raw_data = 0;
+        if (ads122c04_read_data(&m_twi, &raw_data)) {
+            char buf[64];
+            snprintf(buf, sizeof(buf), "ADC Raw Data: %ld\r\n", raw_data);
+            uart_print(buf);
+        } else {
+            uart_print("Failed to read data from ADS112C04.\r\n");
+        }
+
+        nrf_gpio_pin_toggle(LED_PIN);  // Blink LED
+        nrf_delay_ms(1000);  // Delay between reads
     }
 }
+
