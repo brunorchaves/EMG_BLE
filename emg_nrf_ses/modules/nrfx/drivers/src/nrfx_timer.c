@@ -39,13 +39,11 @@
  */
 
 #include <nrfx.h>
+#define NRFX_TIMER_ENABLED
+#define NRFX_TIMER2_ENABLED
+#ifdef NRFX_TIMER_ENABLED
 
-#if NRFX_CHECK(NRFX_TIMER_ENABLED)
 
-#if !(NRFX_CHECK(NRFX_TIMER0_ENABLED) || NRFX_CHECK(NRFX_TIMER1_ENABLED) || \
-      NRFX_CHECK(NRFX_TIMER2_ENABLED) || NRFX_CHECK(NRFX_TIMER3_ENABLED) || \
-      NRFX_CHECK(NRFX_TIMER4_ENABLED))
-#error "No enabled TIMER instances. Check <nrfx_config.h>."
 #endif
 
 #include <nrfx_timer.h>
@@ -303,7 +301,7 @@ void nrfx_timer_1_irq_handler(void)
 }
 #endif
 
-#if NRFX_CHECK(NRFX_TIMER2_ENABLED)
+#ifdef NRFX_TIMER2_ENABLED
 void nrfx_timer_2_irq_handler(void)
 {
     irq_handler(NRF_TIMER2, &m_cb[NRFX_TIMER2_INST_IDX],
@@ -327,4 +325,4 @@ void nrfx_timer_4_irq_handler(void)
 }
 #endif
 
-#endif // NRFX_CHECK(NRFX_TIMER_ENABLED)
+
