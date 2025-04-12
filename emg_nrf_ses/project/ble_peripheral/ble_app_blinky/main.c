@@ -17,6 +17,7 @@
 #define I2C_SDA_PIN    4          // P0.04
 #define I2C_SCL_PIN    5          // P0.05
 #define I2C_INSTANCE_ID 0
+#define BUFFER_SIZE 10  // Define the size of the buffer for storing 10 samples
 
 // === Timer Setup ===
 static const nrfx_timer_t micros_timer = NRFX_TIMER_INSTANCE(2);  // Pode ser 0, 1, 2...
@@ -34,7 +35,6 @@ void micros_timer_init(void) {
     nrfx_timer_enable(&micros_timer);
 }
 
-
 uint32_t getMicros(void) {
     return nrfx_timer_capture(&micros_timer, NRF_TIMER_CC_CHANNEL0);
 }
@@ -47,10 +47,20 @@ uint32_t getMillis(void) {
 static const nrfx_uart_t m_uart = NRFX_UART_INSTANCE(0);
 static uint8_t m_tx_buffer[128];
 static volatile bool m_tx_busy = false;
+static uint8_t m_uart_buffer[BUFFER_SIZE][64];  // Buffer to store 10 samples as strings
+static uint8_t m_uart_buffer_head = 0;
+static uint8_t m_uart_buffer_tail = 0;
 
 void uart_handler(nrfx_uart_event_t const *p_event, void *p_context) {
     if (p_event->type == NRFX_UART_EVT_TX_DONE) {
         m_tx_busy = false;
+        // Check if there are more items in the buffer to send
+        if (m_uart_buffer_head != m_uart_buffer_tail) {
+            size_t chunk_size = strlen((const char *)m_uart_buffer[m_uart_buffer_tail]);
+            nrfx_uart_tx(&m_uart, m_uart_buffer[m_uart_buffer_tail], chunk_size);
+            m_uart_buffer_tail = (m_uart_buffer_tail + 1) % BUFFER_SIZE;
+            m_tx_busy = true;
+        }
     }
 }
 
@@ -62,31 +72,47 @@ void uart_init(void) {
         .pselrts = NRF_UART_PSEL_DISCONNECTED,
         .hwfc = NRF_UART_HWFC_DISABLED,
         .parity = NRF_UART_PARITY_EXCLUDED,
-        .baudrate = NRF_UART_BAUDRATE_115200,
+        .baudrate = NRF_UART_BAUDRATE_250000,
         .interrupt_priority = NRFX_UART_DEFAULT_CONFIG_IRQ_PRIORITY
     };
     nrfx_uart_init(&m_uart, &config, uart_handler);
 }
 
-void uart_print(const char *str) {
+void uart_print_async(const char *str) {
     size_t len = strlen(str);
-    const char *ptr = str;
-
-    while (len > 0) {
-        size_t chunk = len > sizeof(m_tx_buffer) ? sizeof(m_tx_buffer) : len;
-
-        while (m_tx_busy) { __WFE(); }
-
-        memcpy(m_tx_buffer, ptr, chunk);
-        if (nrfx_uart_tx(&m_uart, m_tx_buffer, chunk) == NRFX_SUCCESS) {
-            m_tx_busy = true;
-        } else {
-            break;
+    if (len < 64) {  // Ensure the string is small enough to fit in the buffer
+        memcpy(m_uart_buffer[m_uart_buffer_head], str, len);
+        m_uart_buffer_head = (m_uart_buffer_head + 1) % BUFFER_SIZE;
+        if (m_uart_buffer_head != m_uart_buffer_tail) {
+            // If there's a buffer space, send the data
+            if (!m_tx_busy) {
+                nrfx_uart_tx(&m_uart, m_uart_buffer[m_uart_buffer_tail], len);
+                m_uart_buffer_tail = (m_uart_buffer_tail + 1) % BUFFER_SIZE;
+                m_tx_busy = true;
+            }
         }
-
-        ptr += chunk;
-        len -= chunk;
     }
+}
+
+// === Circular Buffer for 10 samples ===
+#define BUFFER_SIZE 10
+int16_t sample_buffer[BUFFER_SIZE];
+uint8_t buffer_head = 0;
+uint8_t buffer_tail = 0;
+
+void buffer_add_sample(int16_t sample) {
+    sample_buffer[buffer_head] = sample;
+    buffer_head = (buffer_head + 1) % BUFFER_SIZE;
+    if (buffer_head == buffer_tail) {
+        buffer_tail = (buffer_tail + 1) % BUFFER_SIZE;  // Overwrite the oldest sample
+    }
+}
+
+void buffer_send_samples(void) {
+    char buf[64];
+    snprintf(buf, sizeof(buf), "%d\r\n", sample_buffer[buffer_tail]);
+    uart_print_async(buf);
+    buffer_tail = (buffer_tail + 1) % BUFFER_SIZE;
 }
 
 // === I2C Setup ===
@@ -102,7 +128,7 @@ void twi_init(void) {
     };
 
     if (nrfx_twi_init(&m_twi, &config, NULL, NULL) != NRFX_SUCCESS) {
-        uart_print("ERROR: TWI init failed!\r\n");
+        uart_print_async("ERROR: TWI init failed!\r\n");
         //while (1);  // Halt
     }
 
@@ -122,33 +148,33 @@ void gpio_init(void) {
 
 // === I2C Scan ===
 void i2c_scan(void) {
-    uart_print("Starting I2C scan...\r\n");
+    uart_print_async("Starting I2C scan...\r\n");
     for (uint8_t addr = 1; addr < 127; addr++) {
         uint8_t data;
         ret_code_t err = nrfx_twi_rx(&m_twi, addr, &data, 1);
         if (err == NRFX_SUCCESS) {
             char buf[32];
             snprintf(buf, sizeof(buf), "Device found at 0x%02X\r\n", addr);
-            uart_print(buf);
+            uart_print_async(buf);
         }
         //nrf_delay_ms(5);
     }
-    uart_print("I2C scan complete.\r\n");
+    uart_print_async("I2C scan complete.\r\n");
 }
 
-// === ADS1120 Detection ===
-void check_ads1120(void) {
+// === ADS112C04 Detection ===
+void check_ads112c04(void) {
     uint8_t data;
     for (uint8_t addr = 0x40; addr <= 0x41; addr++) {
         ret_code_t err = nrfx_twi_rx(&m_twi, addr, &data, 1);
         if (err == NRFX_SUCCESS) {
             char buf[64];
-            snprintf(buf, sizeof(buf), "ADS1120 detected at address 0x%02X\r\n", addr);
-            uart_print(buf);
+            snprintf(buf, sizeof(buf), "ADS112C04 detected at address 0x%02X\r\n", addr);
+            uart_print_async(buf);
             return;
         }
     }
-    uart_print("ADS1120 not detected at 0x40 or 0x41.\r\n");
+    uart_print_async("ADS112C04 not detected at 0x40 or 0x41.\r\n");
 }
 
 int main(void) {
@@ -156,51 +182,48 @@ int main(void) {
     led_init();
     gpio_init();
     uart_init();
-    uart_print("\r\nSystem Booting...\r\n");
+    uart_print_async("\r\nSystem Booting...\r\n");
 
     twi_init();
-    uart_print("TWI initialized.\r\n");
+    uart_print_async("TWI initialized.\r\n");
 
     i2c_scan();  // One-time scan
-    check_ads1120();
+    check_ads112c04();
 
     // === Initialize ADS112C04 ===
-    uart_print("Initializing ADS112C04...\r\n");
-    if (!ads122c04_init(&m_twi)) {
-        uart_print("Failed to reset ADS112C04.\r\n");
-        //while (1); // Halt
+    uart_print_async("Initializing ADS112C04...\r\n");
+    if (!ads112c04_init(&m_twi)) {
+        uart_print_async("Failed to reset ADS112C04.\r\n");
+        while (1); // Halt
     }
-    uart_print("ADS112C04 reset successful.\r\n");
+    uart_print_async("ADS112C04 reset successful.\r\n");
 
     // === Configure ADS112C04 for raw mode ===
-    uart_print("Configuring ADS112C04 raw mode...\r\n");
-    if (!ads122c04_configure_raw_mode(&m_twi)) {
-        uart_print("Failed to configure ADS112C04.\r\n");
-       // while (1); // Halt
+    uart_print_async("Configuring ADS112C04 raw mode...\r\n");
+    if (!ads112c04_configure_raw_mode(&m_twi)) {
+        uart_print_async("Failed to configure ADS112C04.\r\n");
+        while (1); // Halt
     }
-    uart_print("ADS112C04 configured.\r\n");
+    uart_print_async("ADS112C04 configured.\r\n");
 
     // === Blink control ===
     uint32_t lastBlinkTime = 0;
     const uint32_t blinkInterval = 1000; // ms
-    int32_t raw_data = 0;
+    int16_t raw_data = 0;
     // === Continuous Data Reading Loop ===
     while (1) {
-        
-        if (ads122c04_read_data(&m_twi, &raw_data)) {
-            char buf[64];
-            snprintf(buf, sizeof(buf), "ADC Raw Data: %ld\r\n", raw_data);
-            uart_print(buf);
+        if (ads112c04_read_data(&m_twi, &raw_data)) {
+            buffer_add_sample(raw_data);
+            buffer_send_samples();  // Send the sample from the buffer
         } else {
-            uart_print("Failed to read data from ADS112C04.\r\n");
+            uart_print_async("Failed to read data from ADS112C04.\r\n");
         }
+        
         // === Non-blocking LED blink using millis ===
         uint32_t currentMillis = getMillis();
         if (currentMillis - lastBlinkTime >= blinkInterval) {
             lastBlinkTime = currentMillis;
             nrf_gpio_pin_toggle(LED_PIN);
         }
-        
     }
 }
-
