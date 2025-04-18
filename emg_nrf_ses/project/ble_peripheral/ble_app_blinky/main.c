@@ -9,6 +9,32 @@
 #include "ADS112C04.h"
 #include "nrfx_timer.h"
 
+// === Butterworth Filter (Order 2, Bandpass 20–480 Hz, Fs = 2000 Hz) ===
+#define NZEROS 4
+#define NPOLES 4
+#define GAIN   3.851631157f
+static float xv[NZEROS+1] = {0}, yv[NPOLES+1] = {0};
+
+float butterworth_filter(float input) {
+    xv[0] = xv[1]; xv[1] = xv[2]; xv[2] = xv[3]; xv[3] = xv[4];
+    xv[4] = input / GAIN;
+    yv[0] = yv[1]; yv[1] = yv[2]; yv[2] = yv[3]; yv[3] = yv[4];
+    yv[4] = (xv[0] + xv[4]) - 2 * xv[2]
+          + (-0.1754120032f * yv[0]) + (0.4695834221f * yv[1])
+          + (-1.3227301903f * yv[2]) + (2.0242112308f * yv[3]);
+    return yv[4];
+}
+
+// === Convert raw ADC value to voltage and remove offset ===
+#define ADC_MAX_VALUE 65535.0f
+#define VREF           5.0f
+#define OFFSET_VOLTAGE 2.5f
+
+float convert_to_voltage(int16_t raw) {
+    float voltage = ((float)raw / ADC_MAX_VALUE) * VREF;
+    return voltage - OFFSET_VOLTAGE;
+}
+
 // === Hardware Configuration ===
 #define LED_PIN           (32 + 13)
 #define RST_PIN           28
@@ -204,7 +230,9 @@ int main(void) {
 
     while (1) {
         if (ads112c04_read_data(&m_twi, &raw_data)) {
-            fifo_push(raw_data);
+            float filtered = butterworth_filter(raw_data);
+            float voltage = convert_to_voltage(filtered);
+            fifo_push((int16_t)(filtered * 1000)); // opcional: converte para mV se quiser
         }
 
         if (fifo_pop(&out_sample)) {
