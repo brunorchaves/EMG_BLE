@@ -6,7 +6,7 @@
 BLEService emgService("19B10000-E8F2-537E-4F6C-D104768A1214");
 BLEIntCharacteristic emgDataChar("19B10001-E8F2-537E-4F6C-D104768A1214", BLERead | BLENotify);
 int oldEMGData = 0;
-bool bleEnabled = true; // Flag to enable/disable BLE functionality
+bool bleEnabled = false; // Flag to enable/disable BLE functionality
 
 #define ADDRESS_0X40  0x40
 SFE_ADS122C04 EMG_0x40_sensor(ADDRESS_0X40);
@@ -47,6 +47,7 @@ float butterworthFilter(float input) {
 
 void setup() {
   Serial.begin(115200);
+  Serial1.begin(115200);   // UART por pinos TX/RX (D6/D7)
   Serial.println("Starting ADS112...");
 
   pinMode(RSTPIN, OUTPUT);
@@ -107,7 +108,7 @@ void loop()
     // voltage -= OFFSET_VOLTAGE; // Remove 2.5V offset
     // voltage *= 1000;
     // filteredEMG = butterworthFilter(voltage); // Apply Butterworth filter
-    Serial.println(raw_EMG_0X40); // Print filtered signal
+    Serial1.println(raw_EMG_0X40); // Print filtered signal
   }
   // Only read when data is ready (DRDY goes low)
   // if (digitalRead(DRDYPIN) == LOW) 

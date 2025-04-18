@@ -5,17 +5,17 @@
 #include <stdio.h>
 // Default raw mode configuration
 static const ads112c04_config_t raw_mode_config = {
-    .mux_config = 0x08,   // AIN0 to AINP, AVSS to AINN
-    .gain = 0x00,         // Gain = 1
-    .pga_bypass = 0x00,   // PGA enabled
-    .data_rate = 0x06,    // 1000 SPS
-    .op_mode = 0x01,      // Turbo mode
-    .conv_mode = 0x01,    // Continuous conversion
-    .vref = 0x02,         // AVDD as reference
-    .temp_sensor = 0x00,  // Temp sensor off
-    .idac_current = 0x00, // IDAC off
-    .idac1_routing = 0x00,// IDAC1 disabled
-    .idac2_routing = 0x00 // IDAC2 disabled
+    .mux_config = 0x8,   // AIN0 to AINP, AVSS to AINN
+    .gain = 0x0,         // Gain = 1
+    .pga_bypass = 0x1,   // PGA disabled
+    .data_rate = 0x6,    // 1000 SPS
+    .op_mode = 0x1,      // Turbo mode
+    .conv_mode = 0x1,    // Continuous conversion
+    .vref = 0x2,         // AVDD as reference
+    .temp_sensor = 0x0,  // Temp sensor off
+    .idac_current = 0x0, // IDAC off
+    .idac1_routing = 0x0,// IDAC1 disabled
+    .idac2_routing = 0x0 // IDAC2 disabled
 };
 
 bool ads112c04_init(nrfx_twi_t *twi_instance) {
