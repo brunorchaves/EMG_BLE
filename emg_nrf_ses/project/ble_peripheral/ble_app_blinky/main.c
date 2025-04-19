@@ -9,21 +9,52 @@
 #include "ADS112C04.h"
 #include "nrfx_timer.h"
 
-// === Butterworth Filter (Order 2, Bandpass 20–480 Hz, Fs = 2000 Hz) ===
+
+// === DS3502 ===
+#define DS3502_I2C_ADDR   0x28
+#define DS3502_WIPER_REG  0x00
+
+// === Resistance Settings (Approximate) ===
+#define DS3502_RES_0_OHM       0x00  // 0 Ω
+#define DS3502_RES_1K_OHM      0x0D  // ~1.0 kΩ
+#define DS3502_RES_2K_OHM      0x1A  // ~2.0 kΩ
+#define DS3502_RES_3K_OHM      0x27  // ~3.0 kΩ
+#define DS3502_RES_4K_OHM      0x34  // ~4.0 kΩ
+#define DS3502_RES_5K_OHM      0x3F  // ~5.0 kΩ
+#define DS3502_RES_6K_OHM      0x4C  // ~6.0 kΩ
+#define DS3502_RES_7K_OHM      0x59  // ~7.0 kΩ
+#define DS3502_RES_8K_OHM      0x66  // ~8.0 kΩ
+#define DS3502_RES_9K_OHM      0x73  // ~9.0 kΩ
+#define DS3502_RES_10K_OHM     0x7F  // ~10.0 kΩ
+
+// === Desired Resistance Setting ===
+#define RESISTANCE_SETTING     DS3502_RES_2K_OHM
+
+bool ds3502_set_resistance(nrfx_twi_t *twi, uint8_t value) {
+    if (value > 0x7F) value = 0x7F;
+
+    uint8_t data[2] = { DS3502_WIPER_REG, value };
+    nrfx_err_t err = nrfx_twi_tx(twi, DS3502_I2C_ADDR, data, sizeof(data), false);
+
+    return (err == NRFX_SUCCESS);
+}
+// === Butterworth Filter (Order 2, Bandpass 20–400 Hz, Fs = 2000 Hz) ===
 #define NZEROS 4
 #define NPOLES 4
-#define GAIN   3.851631157f
-static float xv[NZEROS+1] = {0}, yv[NPOLES+1] = {0};
+#define GAIN   5.182411747f
+
+static float xv[NZEROS + 1] = {0}, yv[NPOLES + 1] = {0};
 
 float butterworth_filter(float input) {
     xv[0] = xv[1]; xv[1] = xv[2]; xv[2] = xv[3]; xv[3] = xv[4];
     xv[4] = input / GAIN;
     yv[0] = yv[1]; yv[1] = yv[2]; yv[2] = yv[3]; yv[3] = yv[4];
     yv[4] = (xv[0] + xv[4]) - 2 * xv[2]
-          + (-0.1754120032f * yv[0]) + (0.4695834221f * yv[1])
-          + (-1.3227301903f * yv[2]) + (2.0242112308f * yv[3]);
+          + (-0.2066719852f * yv[0]) + (0.8192636853f * yv[1])
+          + (-1.9509646898f * yv[2]) + (2.3350824021f * yv[3]);
     return yv[4];
 }
+
 
 // === Convert raw ADC value to voltage and remove offset ===
 #define ADC_MAX_VALUE 65535.0f
@@ -222,7 +253,12 @@ int main(void) {
         while (1);
     }
     uart_print_async("ADS112C04 configured.\r\n");
-
+    // Configura resistência do DS3502
+    if (ds3502_set_resistance(&m_twi, RESISTANCE_SETTING)) {
+        uart_print_async("DS3502 resistance set successfully.\r\n");
+    } else {
+        uart_print_async("Failed to set DS3502 resistance.\r\n");
+    }
     uint32_t lastBlinkTime = 0;
     const uint32_t blinkInterval = 1000;
     int16_t raw_data = 0;
@@ -232,7 +268,7 @@ int main(void) {
         if (ads112c04_read_data(&m_twi, &raw_data)) {
             float filtered = butterworth_filter(raw_data);
             float voltage = convert_to_voltage(filtered);
-            fifo_push((int16_t)(filtered * 1000)); // opcional: converte para mV se quiser
+            fifo_push((int16_t)(filtered * 1000.0f)); // opcional: converte para mV se quiser
         }
 
         if (fifo_pop(&out_sample)) {
