@@ -1,4 +1,5 @@
 "Output/Debug/Obj/ble_app_blinky_pca10056_s140/main.o"
+"Output/Debug/Obj/ble_app_blinky_pca10056_s140/ble_emg_service.o"
 "Output/Debug/Obj/ble_app_blinky_pca10056_s140/boards.o"
 "Output/Debug/Obj/ble_app_blinky_pca10056_s140/ses_startup_nrf52840.o"
 "Output/Debug/Obj/ble_app_blinky_pca10056_s140/ses_startup_nrf_common.o"
@@ -9,6 +10,7 @@
 "Output/Debug/Obj/ble_app_blinky_pca10056_s140/ble_srv_common.o"
 "Output/Debug/Obj/ble_app_blinky_pca10056_s140/nrf_ble_gatt.o"
 "Output/Debug/Obj/ble_app_blinky_pca10056_s140/nrf_ble_qwr.o"
+"Output/Debug/Obj/ble_app_blinky_pca10056_s140/ble_advertising.o"
 "Output/Debug/Obj/ble_app_blinky_pca10056_s140/ble_lbs.o"
 "Output/Debug/Obj/ble_app_blinky_pca10056_s140/ADS112C04.o"
 "Output/Debug/Obj/ble_app_blinky_pca10056_s140/nrf_drv_clock.o"

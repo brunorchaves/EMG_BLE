@@ -47,6 +47,7 @@
       link_use_linker_script_file="No"
       linker_section_placement_file="flash_placement.xml" />
     <folder Name="Application">
+      <file file_name="../../../ble_emg_service.c" />
       <file file_name="../../../main.c" />
       <file file_name="../config/sdk_config.h" />
     </folder>
@@ -60,6 +61,7 @@
     </folder>
     <folder Name="nRF_BLE">
       <file file_name="../../../../../../components/ble/common/ble_advdata.c" />
+      <file file_name="../../../../../../components/ble/ble_advertising/ble_advertising.c" />
       <file file_name="../../../../../../components/ble/common/ble_conn_params.c" />
       <file file_name="../../../../../../components/ble/common/ble_conn_state.c" />
       <file file_name="../../../../../../components/ble/common/ble_srv_common.c" />

@@ -55,11 +55,11 @@ float butterworth_filter(float input) {
 }
 
 
-#define ADC_FULL_SCALE 32768.0f  // pois o range vai de -32768 a +32767
+#define ADC_FULL_SCALE 32768  // pois o range vai de -32768 a +32767
 #define VREF           5.0f
-float convert_to_voltage(int16_t raw) {
-    float voltage = ((float)raw / ADC_FULL_SCALE) * (VREF / 2.0f); // ganho unitário
-    return voltage;
+int16_t remove_offset(int16_t raw) {
+    int16_t noOffset = raw - ADC_FULL_SCALE/2;
+    return noOffset;
 }
 
 
@@ -263,9 +263,9 @@ int main(void) {
 
     while (1) {
         if (ads112c04_read_data(&m_twi, &raw_data)) {
-            float voltage = convert_to_voltage(raw_data);
-            float filtered = butterworth_filter(voltage);
-            fifo_push((int16_t)(filtered * 10000.0f)); // opcional: converte para mV se quiser
+            int16_t data = remove_offset(raw_data);
+            float filtered = butterworth_filter((int16_t)data);
+            fifo_push((int16_t)(filtered)); // opcional: converte para mV se quiser
         }
 
         if (fifo_pop(&out_sample)) {
