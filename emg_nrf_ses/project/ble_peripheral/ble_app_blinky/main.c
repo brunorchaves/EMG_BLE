@@ -5,7 +5,6 @@
 #include "nrfx_uart.h"
 #include "nrfx_twi.h"
 #include "nrf_gpio.h"
-#include "nrf_delay.h"
 #include "ADS112C04.h"
 #include "nrfx_timer.h"
 
@@ -28,7 +27,7 @@
 #define DS3502_RES_10K_OHM     0x7F  // ~10.0 kΩ
 
 // === Desired Resistance Setting ===
-#define RESISTANCE_SETTING     DS3502_RES_2K_OHM
+#define RESISTANCE_SETTING     DS3502_RES_10K_OHM
 
 bool ds3502_set_resistance(nrfx_twi_t *twi, uint8_t value) {
     if (value > 0x7F) value = 0x7F;
@@ -56,15 +55,13 @@ float butterworth_filter(float input) {
 }
 
 
-// === Convert raw ADC value to voltage and remove offset ===
-#define ADC_MAX_VALUE 65535.0f
+#define ADC_FULL_SCALE 32768.0f  // pois o range vai de -32768 a +32767
 #define VREF           5.0f
-#define OFFSET_VOLTAGE 2.5f
-
 float convert_to_voltage(int16_t raw) {
-    float voltage = ((float)raw / ADC_MAX_VALUE) * VREF;
-    return voltage - OFFSET_VOLTAGE;
+    float voltage = ((float)raw / ADC_FULL_SCALE) * (VREF / 2.0f); // ganho unitário
+    return voltage;
 }
+
 
 // === Hardware Configuration ===
 #define LED_PIN           (32 + 13)
@@ -266,9 +263,9 @@ int main(void) {
 
     while (1) {
         if (ads112c04_read_data(&m_twi, &raw_data)) {
-            float filtered = butterworth_filter(raw_data);
-            float voltage = convert_to_voltage(filtered);
-            fifo_push((int16_t)(filtered * 1000.0f)); // opcional: converte para mV se quiser
+            float voltage = convert_to_voltage(raw_data);
+            float filtered = butterworth_filter(voltage);
+            fifo_push((int16_t)(filtered * 10000.0f)); // opcional: converte para mV se quiser
         }
 
         if (fifo_pop(&out_sample)) {

@@ -61,7 +61,6 @@ Output/Debug/Obj/ble_app_blinky_pca10056_s140/main.o: \
  ../../../../../../modules/nrfx/drivers/include/nrfx_twi_twim.h \
  ../../../../../../modules/nrfx/hal/nrf_twi.h \
  ../../../../../../modules/nrfx/hal/nrf_gpio.h \
- ../../../../../../components/libraries/delay/nrf_delay.h \
  C:\Users\bruno.ribeiro\Documents\Github\EMG_BLE\EMG_BLE\emg_nrf_ses\project\ble_peripheral\ble_app_blinky\ADS112C04.h \
  ../../../../../../modules/nrfx/drivers/include/nrfx_timer.h \
  ../../../../../../modules/nrfx/hal/nrf_timer.h
