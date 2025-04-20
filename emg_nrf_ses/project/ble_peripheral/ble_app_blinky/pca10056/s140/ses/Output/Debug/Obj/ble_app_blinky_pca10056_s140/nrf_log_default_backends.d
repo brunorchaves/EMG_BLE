@@ -57,4 +57,4 @@ Output/Debug/Obj/ble_app_blinky_pca10056_s140/nrf_log_default_backends.o: \
  C:\Users\bruno.ribeiro\Documents\Github\EMG_BLE\EMG_BLE\emg_nrf_ses\components\libraries\log\src\nrf_log_internal.h \
  ../../../../../../components/libraries/log/nrf_log_types.h \
  ../../../../../../components/libraries/util/nrf_assert.h \
- ../../../../../../components/libraries/log/nrf_log_backend_uart.h
+ ../../../../../../components/libraries/log/nrf_log_backend_rtt.h

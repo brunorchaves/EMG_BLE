@@ -45,7 +45,8 @@
     <configuration
       Name="Debug"
       link_use_linker_script_file="No"
-      linker_section_placement_file="flash_placement.xml" />
+      linker_section_placement_file="flash_placement.xml"
+      target_loader_erase_all="No" />
     <folder Name="Application">
       <file file_name="../../../ble_emg_service.c" />
       <file file_name="../../../main.c" />

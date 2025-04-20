@@ -31,16 +31,12 @@ Output/Debug/Obj/ble_app_blinky_pca10056_s140/ble_emg_service.o: \
  ../../../../../../modules/nrfx/mdk/compiler_abstraction.h \
  ../../../../../../components/softdevice/s140/headers/ble_gatts.h \
  C:/Program\ Files/SEGGER/SEGGER\ Embedded\ Studio\ 8.22a/include/string.h \
- ../../../../../../components/libraries/util/app_error.h \
  C:/Program\ Files/SEGGER/SEGGER\ Embedded\ Studio\ 8.22a/include/stdio.h \
- C:/Program\ Files/SEGGER/SEGGER\ Embedded\ Studio\ 8.22a/include/stdbool.h \
- ../../../../../../components/libraries/util/sdk_errors.h \
- ../../../../../../components/softdevice/s140/headers/nrf_error.h \
- ../../../../../../components/libraries/util/nordic_common.h \
- ../../../../../../components/libraries/util/app_error_weak.h \
  ../../../../../../components/softdevice/common/nrf_sdh.h \
+ C:/Program\ Files/SEGGER/SEGGER\ Embedded\ Studio\ 8.22a/include/stdbool.h \
  ../config/sdk_config.h \
  ../../../../../../components/libraries/util/sdk_errors.h \
+ ../../../../../../components/softdevice/s140/headers/nrf_error.h \
  ../../../../../../components/libraries/experimental_section_vars/nrf_section_iter.h \
  C:/Program\ Files/SEGGER/SEGGER\ Embedded\ Studio\ 8.22a/include/stddef.h \
  ../../../../../../components/libraries/experimental_section_vars/nrf_section.h \
@@ -48,6 +44,7 @@ Output/Debug/Obj/ble_app_blinky_pca10056_s140/ble_emg_service.o: \
  ../../../../../../components/libraries/util/nrf_assert.h \
  ../../../../../../components/libraries/util/app_util.h \
  ../../../../../../modules/nrfx/mdk/compiler_abstraction.h \
+ ../../../../../../components/libraries/util/nordic_common.h \
  ../../../../../../components/softdevice/s140/headers/nrf52/nrf_mbr.h \
  ../../../../../../components/softdevice/s140/headers/nrf_svc.h \
  ../../../../../../components/softdevice/common/nrf_sdh_ble.h \
@@ -56,6 +53,7 @@ Output/Debug/Obj/ble_app_blinky_pca10056_s140/ble_emg_service.o: \
  ../../../../../../components/ble/common/ble_advdata.h \
  ../../../../../../components/libraries/util/sdk_common.h \
  ../../../../../../components/libraries/util/sdk_os.h \
+ ../../../../../../components/libraries/util/sdk_errors.h \
  ../../../../../../components/libraries/util/app_util.h \
  ../../../../../../components/libraries/util/sdk_macros.h \
  ../../../../../../components/libraries/util/nrf_assert.h \

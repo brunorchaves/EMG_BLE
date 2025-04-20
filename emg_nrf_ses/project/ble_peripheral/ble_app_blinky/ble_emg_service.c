@@ -1,13 +1,27 @@
 #include "ble_emg_service.h"
 
 #include <string.h>
-#include "app_error.h"
+#include <stdio.h>
 #include "nrf_sdh.h"
 #include "nrf_sdh_ble.h"
 #include "nrf_ble_gatt.h"
 #include "ble_advdata.h"
 #include "ble_advertising.h"
 #include "ble_srv_common.h"
+
+// UART logging (vinda do main.c)
+extern void uart_print_async(const char *str);
+
+// Macro para log de erro
+#define CHECK_ERROR(msg, err)                          \
+    do {                                               \
+        if ((err) != NRF_SUCCESS) {                    \
+            char err_msg[64];                          \
+            snprintf(err_msg, sizeof(err_msg),         \
+                     "%s failed: 0x%04X\r\n", msg, err); \
+            uart_print_async(err_msg);                 \
+        }                                              \
+    } while (0)
 
 NRF_BLE_GATT_DEF(m_gatt);
 BLE_ADVERTISING_DEF(m_advertising);
@@ -31,10 +45,12 @@ void ble_evt_handler(ble_evt_t const * p_ble_evt, void * p_context)
     {
         case BLE_GAP_EVT_CONNECTED:
             m_conn_handle = p_ble_evt->evt.gap_evt.conn_handle;
+            uart_print_async("BLE conectado\r\n");
             break;
 
         case BLE_GAP_EVT_DISCONNECTED:
             m_conn_handle = BLE_CONN_HANDLE_INVALID;
+            uart_print_async("BLE desconectado, reiniciando advertising...\r\n");
             ble_emg_advertising_start();
             break;
 
@@ -47,31 +63,47 @@ NRF_SDH_BLE_OBSERVER(m_ble_observer, 3, ble_evt_handler, NULL);
 
 void ble_emg_stack_init(void)
 {
+    uart_print_async("Iniciando BLE stack...\r\n");
+
     ret_code_t err_code = nrf_sdh_enable_request();
-    APP_ERROR_CHECK(err_code);
+    CHECK_ERROR("nrf_sdh_enable_request", err_code);
 
     uint32_t ram_start = 0;
     err_code = nrf_sdh_ble_default_cfg_set(1, &ram_start);
-    APP_ERROR_CHECK(err_code);
+    CHECK_ERROR("nrf_sdh_ble_default_cfg_set", err_code);
 
     err_code = nrf_sdh_ble_enable(&ram_start);
-    APP_ERROR_CHECK(err_code);
+    CHECK_ERROR("nrf_sdh_ble_enable", err_code);
+
+    uart_print_async("BLE stack inicializada\r\n");
 }
 
 void ble_emg_gap_init(void)
 {
+    uart_print_async("Configurando GAP (nome)...\r\n");
+
     ble_gap_conn_sec_mode_t sec_mode;
     BLE_GAP_CONN_SEC_MODE_SET_OPEN(&sec_mode);
-    sd_ble_gap_device_name_set(&sec_mode, (const uint8_t *)"XIAO_BLE_EMG", strlen("XIAO_BLE_EMG"));
+    ret_code_t err_code = sd_ble_gap_device_name_set(&sec_mode, (const uint8_t *)"XIAO_BLE_EMG", strlen("XIAO_BLE_EMG"));
+    CHECK_ERROR("sd_ble_gap_device_name_set", err_code);
+
+    uart_print_async("Nome configurado com sucesso\r\n");
 }
 
 void ble_emg_gatt_init(void)
 {
-    nrf_ble_gatt_init(&m_gatt, NULL);
+    uart_print_async("Inicializando GATT...\r\n");
+
+    ret_code_t err_code = nrf_ble_gatt_init(&m_gatt, NULL);
+    CHECK_ERROR("nrf_ble_gatt_init", err_code);
+
+    uart_print_async("GATT inicializado\r\n");
 }
 
 void ble_emg_advertising_init(void)
 {
+    uart_print_async("Inicializando advertising...\r\n");
+
     ble_advdata_t advdata;
     ble_uuid_t adv_uuids[] = {
         {EMG_SERVICE_UUID, m_emg_uuid.type}
@@ -95,28 +127,37 @@ void ble_emg_advertising_init(void)
     init.config.ble_adv_fast_timeout = 180;
 
     init.evt_handler = NULL;
-    ble_advertising_init(&m_advertising, &init);
+
+    ret_code_t err_code = ble_advertising_init(&m_advertising, &init);
+    CHECK_ERROR("ble_advertising_init", err_code);
+
     ble_advertising_conn_cfg_tag_set(&m_advertising, 1);
+    uart_print_async("Advertising configurado\r\n");
+    
 }
 
 void ble_emg_advertising_start(void)
 {
-    ble_advertising_start(&m_advertising, BLE_ADV_MODE_FAST);
+    uart_print_async("Iniciando advertising...\r\n");
+    ret_code_t err_code = ble_advertising_start(&m_advertising, BLE_ADV_MODE_FAST);
+    CHECK_ERROR("ble_advertising_start", err_code);
 }
 
 void ble_emg_service_init(void)
 {
-    ret_code_t err_code;
+    uart_print_async("Registrando serviço BLE EMG...\r\n");
 
-    err_code = sd_ble_uuid_vs_add(&EMG_BASE_UUID, &m_emg_uuid.type);
-    APP_ERROR_CHECK(err_code);
+    ret_code_t err_code = sd_ble_uuid_vs_add(&EMG_BASE_UUID, &m_emg_uuid.type);
+    CHECK_ERROR("sd_ble_uuid_vs_add", err_code);
+    uart_print_async("UUID custom adicionado\r\n");
 
     m_emg_uuid.uuid = EMG_SERVICE_UUID;
 
     err_code = sd_ble_gatts_service_add(BLE_GATTS_SRVC_TYPE_PRIMARY,
                                         &m_emg_uuid,
                                         &m_emg_service_handle);
-    APP_ERROR_CHECK(err_code);
+    CHECK_ERROR("sd_ble_gatts_service_add", err_code);
+    uart_print_async("Serviço EMG adicionado\r\n");
 
     ble_gatts_char_md_t char_md = {0};
     char_md.char_props.notify = 1;
@@ -143,7 +184,8 @@ void ble_emg_service_init(void)
                                                &char_md,
                                                &attr_char_value,
                                                &m_emg_char_handles);
-    APP_ERROR_CHECK(err_code);
+    CHECK_ERROR("sd_ble_gatts_characteristic_add", err_code);
+    uart_print_async("Característica EMG adicionada\r\n");
 }
 
 void ble_emg_notify(int16_t sample)

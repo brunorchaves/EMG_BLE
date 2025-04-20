@@ -1,14 +1,117 @@
-#include <stdint.h>
-#include <string.h>
-#include <stdio.h>
+/*
+ * Junção do exemplo ble_app_blinky com o código funcional do EMG.
+ * Mantém o BLE ativo com advertising, sem usar funções de LED ou botões BLE.
+ * Parte do main e inicialização BLE permanece, o loop original é preservado.
+ */
 
-#include "nrfx_uart.h"
-#include "nrfx_twi.h"
-#include "nrf_gpio.h"
-#include "ADS112C04.h"
-#include "nrfx_timer.h"
+ #include <stdint.h>
+ #include <string.h>
+ #include <stdio.h>
+ 
+ #include "nrfx_uart.h"
+ #include "nrfx_twi.h"
+ #include "nrf_gpio.h"
+ #include "nrfx_timer.h"
+ #include "ADS112C04.h"
+ 
+ #include "nrf_sdh.h"
+ #include "nrf_sdh_ble.h"
+ #include "ble_advdata.h"
+ #include "ble_gap.h"
+ #include "nrf_log.h"
+ #include "nrf_log_ctrl.h"
+ #include "nrf_log_default_backends.h"
+ #include "nrf_pwr_mgmt.h"
+ 
+ #define DEVICE_NAME                     "EMG_Device"
+ #define APP_BLE_CONN_CFG_TAG            1
+ #define APP_BLE_OBSERVER_PRIO           3
+ #define APP_ADV_INTERVAL                64
+ #define APP_ADV_DURATION                BLE_GAP_ADV_TIMEOUT_GENERAL_UNLIMITED
+ 
+ static uint8_t m_adv_handle = BLE_GAP_ADV_SET_HANDLE_NOT_SET;
+ static uint8_t m_enc_advdata[BLE_GAP_ADV_SET_DATA_SIZE_MAX];
+ static uint8_t m_enc_scan_response_data[BLE_GAP_ADV_SET_DATA_SIZE_MAX];
+ 
+ static ble_gap_adv_data_t m_adv_data = {
+     .adv_data = {
+         .p_data = m_enc_advdata,
+         .len    = BLE_GAP_ADV_SET_DATA_SIZE_MAX
+     },
+     .scan_rsp_data = {
+         .p_data = m_enc_scan_response_data,
+         .len    = BLE_GAP_ADV_SET_DATA_SIZE_MAX
+     }
+ };
+ 
+ void ble_stack_init(void) {
+     ret_code_t err_code = nrf_sdh_enable_request();
+     APP_ERROR_CHECK(err_code);
+ 
+     uint32_t ram_start = 0;
+     err_code = nrf_sdh_ble_default_cfg_set(APP_BLE_CONN_CFG_TAG, &ram_start);
+     APP_ERROR_CHECK(err_code);
+ 
+     err_code = nrf_sdh_ble_enable(&ram_start);
+     APP_ERROR_CHECK(err_code);
+ }
+ 
+ void advertising_init(void) {
+     ret_code_t err_code;
+     ble_advdata_t advdata;
+     ble_advdata_t srdata;
+ 
+     ble_uuid_t adv_uuids[] = {{0x180A, BLE_UUID_TYPE_BLE}};
+ 
+     memset(&advdata, 0, sizeof(advdata));
+     advdata.name_type = BLE_ADVDATA_FULL_NAME;
+     advdata.include_appearance = false;
+     advdata.flags = BLE_GAP_ADV_FLAGS_LE_ONLY_GENERAL_DISC_MODE;
+ 
+     memset(&srdata, 0, sizeof(srdata));
+     srdata.uuids_complete.uuid_cnt = sizeof(adv_uuids) / sizeof(adv_uuids[0]);
+     srdata.uuids_complete.p_uuids = adv_uuids;
+ 
+     err_code = ble_advdata_encode(&advdata, m_adv_data.adv_data.p_data, &m_adv_data.adv_data.len);
+     APP_ERROR_CHECK(err_code);
+ 
+     err_code = ble_advdata_encode(&srdata, m_adv_data.scan_rsp_data.p_data, &m_adv_data.scan_rsp_data.len);
+     APP_ERROR_CHECK(err_code);
+ 
+     ble_gap_adv_params_t adv_params = {0};
+     adv_params.primary_phy = BLE_GAP_PHY_1MBPS;
+     adv_params.duration = APP_ADV_DURATION;
+     adv_params.properties.type = BLE_GAP_ADV_TYPE_CONNECTABLE_SCANNABLE_UNDIRECTED;
+     adv_params.filter_policy = BLE_GAP_ADV_FP_ANY;
+     adv_params.interval = APP_ADV_INTERVAL;
+ 
+     err_code = sd_ble_gap_adv_set_configure(&m_adv_handle, &m_adv_data, &adv_params);
+     APP_ERROR_CHECK(err_code);
+ }
+ 
+ void advertising_start(void) {
+     ret_code_t err_code = sd_ble_gap_adv_start(m_adv_handle, APP_BLE_CONN_CFG_TAG);
+     APP_ERROR_CHECK(err_code);
+ }
+ 
+ void log_init(void) {
+     APP_ERROR_CHECK(NRF_LOG_INIT(NULL));
+     NRF_LOG_DEFAULT_BACKENDS_INIT();
+ }
+ 
+ void power_management_init(void) {
+     APP_ERROR_CHECK(nrf_pwr_mgmt_init());
+ }
 
+void gap_params_init(void) {
+    ble_gap_conn_sec_mode_t sec_mode;
+    BLE_GAP_CONN_SEC_MODE_SET_OPEN(&sec_mode);
 
+    ret_code_t err_code = sd_ble_gap_device_name_set(&sec_mode,
+        (const uint8_t *)"EMG_BLE",
+        strlen("EMG_BLE"));
+    APP_ERROR_CHECK(err_code);
+}
 // === DS3502 ===
 #define DS3502_I2C_ADDR   0x28
 #define DS3502_WIPER_REG  0x00
@@ -225,18 +328,24 @@ void check_ads112c04(void) {
 
 // === Main ===
 int main(void) {
+    log_init();
+    //power_management_init();
+    ble_stack_init();
+    gap_params_init();
+    advertising_init();
+    advertising_start();
     micros_timer_init();
     led_init();
     gpio_init();
     uart_init();
     uart_print_async("\r\nSystem Booting...\r\n");
-
+    
     twi_init();
     uart_print_async("TWI initialized.\r\n");
 
-    i2c_scan();
+    i2c_scan(); 
     check_ads112c04();
-
+    
     uart_print_async("Initializing ADS112C04...\r\n");
     if (!ads112c04_init(&m_twi)) {
         uart_print_async("Failed to reset ADS112C04.\r\n");
