@@ -98,4 +98,20 @@ Output/Debug/Obj/ble_app_blinky_pca10056_s140/main.o: \
  C:/Program\ Files/SEGGER/SEGGER\ Embedded\ Studio\ 8.22a/include/stdlib.h \
  ../../../../../../components/libraries/balloc/nrf_balloc.h \
  ../../../../../../components/libraries/log/nrf_log_default_backends.h \
- ../../../../../../components/libraries/pwr_mgmt/nrf_pwr_mgmt.h
+ ../../../../../../components/libraries/pwr_mgmt/nrf_pwr_mgmt.h \
+ ../../../../../../components/libraries/util/app_error.h \
+ ../../../../../../components/softdevice/s140/headers/ble_err.h \
+ ../../../../../../components/softdevice/s140/headers/ble_hci.h \
+ ../../../../../../components/ble/common/ble_srv_common.h \
+ ../../../../../../components/softdevice/s140/headers/ble_types.h \
+ ../../../../../../components/softdevice/s140/headers/ble_gatt.h \
+ ../../../../../../components/ble/common/ble_conn_params.h \
+ ../../../../../../components/ble/common/ble_srv_common.h \
+ ../../../../../../components/boards/boards.h \
+ ../../../../../../components/boards/pca10056.h \
+ ../../../../../../components/libraries/timer/app_timer.h \
+ ../../../../../../components/libraries/sortlist/nrf_sortlist.h \
+ ../../../../../../components/libraries/button/app_button.h \
+ ../../../../../../components/ble/ble_services/ble_lbs/ble_lbs.h \
+ ../../../../../../components/ble/nrf_ble_gatt/nrf_ble_gatt.h \
+ ../../../../../../components/ble/nrf_ble_qwr/nrf_ble_qwr.h
