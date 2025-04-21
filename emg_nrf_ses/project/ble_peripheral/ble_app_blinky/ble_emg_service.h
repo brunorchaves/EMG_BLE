@@ -10,10 +10,12 @@
 
 #define EMG_SERVICE_UUID              0x0001
 #define EMG_CHAR_UUID                 0x0002
+#define EMG_GAIN_CHAR_UUID            0x0003
 
 typedef struct {
     uint16_t                    service_handle;
     ble_gatts_char_handles_t    emg_char_handles;
+    ble_gatts_char_handles_t    gain_char_handles;  // NOVO
     uint8_t                     uuid_type;
     uint16_t                    conn_handle;
 } ble_emg_service_t;

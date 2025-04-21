@@ -7,9 +7,17 @@
 
 static void on_write(ble_emg_service_t * p_emg, ble_evt_t const * p_ble_evt)
 {
-    // No write support for now
-    (void)p_emg;
-    (void)p_ble_evt;
+    const ble_gatts_evt_write_t * p_evt_write = &p_ble_evt->evt.gatts_evt.params.write;
+
+    if (p_evt_write->handle == p_emg->gain_char_handles.value_handle && p_evt_write->len == 1) {
+        uint8_t new_gain = p_evt_write->data[0];
+
+        if (new_gain >= 1 && new_gain <= 10) {
+            // Aqui você salva o novo ganho ou chama um callback
+            // Exemplo: p_emg->gain_callback(new_gain); ou armazenar localmente
+            //NRF_LOG_INFO("Ganho recebido via BLE: %d", new_gain);
+        }
+    }
 }
 
 void ble_emg_service_on_ble_evt(ble_evt_t const * p_ble_evt, void * p_context)
@@ -45,18 +53,31 @@ uint32_t ble_emg_service_init(ble_emg_service_t * p_emg)
     err_code = sd_ble_gatts_service_add(BLE_GATTS_SRVC_TYPE_PRIMARY, &ble_uuid, &p_emg->service_handle);
     VERIFY_SUCCESS(err_code);
 
-    // Add EMG Characteristic
+    // --- Add EMG Characteristic (notify) ---
     memset(&add_char_params, 0, sizeof(add_char_params));
     add_char_params.uuid              = EMG_CHAR_UUID;
     add_char_params.uuid_type         = p_emg->uuid_type;
     add_char_params.max_len           = sizeof(uint16_t);  // 2 bytes EMG signal
     add_char_params.init_len          = sizeof(uint16_t);
     add_char_params.char_props.notify = 1;
-
     add_char_params.cccd_write_access = SEC_OPEN;
 
     err_code = characteristic_add(p_emg->service_handle, &add_char_params, &p_emg->emg_char_handles);
-    return err_code;
+    VERIFY_SUCCESS(err_code);
+
+    // --- Add Gain Characteristic (write) ---
+    memset(&add_char_params, 0, sizeof(add_char_params));
+    add_char_params.uuid              = EMG_GAIN_CHAR_UUID;
+    add_char_params.uuid_type         = p_emg->uuid_type;
+    add_char_params.max_len           = sizeof(uint8_t);
+    add_char_params.init_len          = sizeof(uint8_t);
+    add_char_params.char_props.write  = 1;
+    add_char_params.write_access      = SEC_OPEN;
+
+    err_code = characteristic_add(p_emg->service_handle, &add_char_params, &p_emg->gain_char_handles);
+    VERIFY_SUCCESS(err_code);
+
+    return NRF_SUCCESS;
 }
 
 uint32_t ble_emg_service_notify(ble_emg_service_t * p_emg, uint16_t conn_handle, uint16_t emg_value)

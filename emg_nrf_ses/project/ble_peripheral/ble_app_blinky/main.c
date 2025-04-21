@@ -404,7 +404,9 @@ static void idle_state_handle(void)
 #define DS3502_RES_10K_OHM     0x7F  // ~10.0 kΩ
 
 // === Desired Resistance Setting ===
-#define RESISTANCE_SETTING     DS3502_RES_10K_OHM
+#define DEFAULT_RESITANCE      DS3502_RES_5K_OHM
+#define RESISTANCE_SETTING     DEFAULT_RESITANCE
+volatile uint8_t gain_level = 10;
 
 bool ds3502_set_resistance(nrfx_twi_t *twi, uint8_t value) {
     if (value > 0x7F) value = 0x7F;
@@ -654,6 +656,14 @@ int main(void) {
     int16_t out_sample = 0;
     //Loop principal while
     while (1) {
+
+        if (gain_level >= 1 && gain_level <= 10) 
+        {
+        // Mapeia de 1–10 para valor de resistência
+        uint8_t wiper_value = (gain_level - 1) * 0x0D; // exemplo linear
+        ds3502_set_resistance(&m_twi, wiper_value);
+        }
+
         if (ads112c04_read_data(&m_twi, &raw_data)) {
             int16_t data = remove_offset(raw_data);
             float filtered = butterworth_filter((int16_t)data);
