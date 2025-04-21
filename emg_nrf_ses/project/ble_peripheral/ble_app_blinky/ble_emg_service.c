@@ -4,6 +4,7 @@
 #include "ble_emg_service.h"
 #include "ble_srv_common.h"
 
+
 static void on_write(ble_emg_service_t * p_emg, ble_evt_t const * p_ble_evt)
 {
     // No write support for now

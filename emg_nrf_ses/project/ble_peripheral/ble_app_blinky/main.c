@@ -263,6 +263,7 @@ static void ble_evt_handler(ble_evt_t const * p_ble_evt, void * p_context)
             m_conn_handle = p_ble_evt->evt.gap_evt.conn_handle;
             err_code = nrf_ble_qwr_conn_handle_assign(&m_qwr, m_conn_handle);
             APP_ERROR_CHECK(err_code);
+            m_emg_service.conn_handle = m_conn_handle; // <-- Aqui!
             
             APP_ERROR_CHECK(err_code);
             break;
@@ -271,7 +272,7 @@ static void ble_evt_handler(ble_evt_t const * p_ble_evt, void * p_context)
             NRF_LOG_INFO("Disconnected");
             
             m_conn_handle = BLE_CONN_HANDLE_INVALID;
-            
+            m_emg_service.conn_handle = BLE_CONN_HANDLE_INVALID; // <-- Aqui também
             APP_ERROR_CHECK(err_code);
             advertising_start();
             break;
@@ -663,6 +664,10 @@ int main(void) {
             char buf[32];
             snprintf(buf, sizeof(buf), "%d\r\n", out_sample);
             uart_print_async(buf);
+            // === Enviar via BLE ===
+            if (m_conn_handle != BLE_CONN_HANDLE_INVALID) {
+                ble_emg_service_notify(&m_emg_service, m_emg_service.conn_handle, (uint16_t)out_sample);
+            }
         }
 
         uint32_t currentMillis = getMillis();
