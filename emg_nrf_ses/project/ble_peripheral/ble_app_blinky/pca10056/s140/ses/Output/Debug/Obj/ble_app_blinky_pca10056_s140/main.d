@@ -107,11 +107,6 @@ Output/Debug/Obj/ble_app_blinky_pca10056_s140/main.o: \
  ../../../../../../components/softdevice/s140/headers/ble_gatt.h \
  ../../../../../../components/ble/common/ble_conn_params.h \
  ../../../../../../components/ble/common/ble_srv_common.h \
- ../../../../../../components/boards/boards.h \
- ../../../../../../components/boards/pca10056.h \
- ../../../../../../components/libraries/timer/app_timer.h \
- ../../../../../../components/libraries/sortlist/nrf_sortlist.h \
- ../../../../../../components/libraries/button/app_button.h \
- ../../../../../../components/ble/ble_services/ble_lbs/ble_lbs.h \
  ../../../../../../components/ble/nrf_ble_gatt/nrf_ble_gatt.h \
- ../../../../../../components/ble/nrf_ble_qwr/nrf_ble_qwr.h
+ ../../../../../../components/ble/nrf_ble_qwr/nrf_ble_qwr.h \
+ C:\Users\bruno.ribeiro\Documents\Github\EMG_BLE\EMG_BLE\emg_nrf_ses\project\ble_peripheral\ble_app_blinky\ble_emg_service.h

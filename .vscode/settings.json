@@ -11,5 +11,10 @@
     ],
     "nrf-connect.applications": [
         "${workspaceFolder}\\emg_nrf_sdk\\emg_ble"
-    ]
+    ],
+    "files.associations": {
+        "nrf_log_default_backends.h": "c",
+        "nrf_ble_gatt.h": "c",
+        "ble_advdata.h": "c"
+    }
 }
