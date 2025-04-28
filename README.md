@@ -40,6 +40,7 @@ This repository contains the source code and configuration files for the **EMG_B
 - **Hardware**:
   - Nordic nRF52840 Development Kit (or compatible board).
   - ADS112 sensor for EMG signal acquisition.
+  - Jlink Segger for program loading and debugging.
 - **Software**:
   - [SEGGER Embedded Studio](https://www.segger.com/products/development-tools/embedded-studio/) for nRF SDK projects.
   - [Arduino IDE](https://www.arduino.cc/en/software) for Arduino-based implementation.
