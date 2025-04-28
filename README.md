@@ -23,7 +23,6 @@ This repository contains the source code and configuration files for the **EMG_B
 - **Custom EMG Service**:
   - **EMG Characteristic**: Notifies EMG signal data.
   - **Gain Characteristic**: Allows configuration of the EMG signal gain.
-- **Heart Rate Service (HRS)**: Example BLE service for reference.
 
 ### **EMG Signal Processing**
 - **Butterworth Bandpass Filter**: Filters raw EMG signals to remove noise and extract relevant frequency components.
