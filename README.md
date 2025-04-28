@@ -47,4 +47,4 @@ This repository contains the source code and configuration files for the **EMG_B
 ### **2️⃣ Setup**
 1. Clone the repository:
    ```bash
-   git clone https://github.com/<your-username>/EMG_BLE.git
+   git clone https://github.com/brunorchaves/EMG_BLE.git
