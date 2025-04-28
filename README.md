@@ -1,52 +1,51 @@
-# **EMG_BLE**
+# EMG_BLE
 
-Codes for the EMG BLE project.
-
----
-
-## **📌 Initial Setup**
-
-Follow these steps to set up your development environment:
-
-### **1️⃣ Install Arduino IDE**
-Download the latest version of the Arduino IDE for your operating system:  
-🔗 [Arduino IDE Download](https://www.arduino.cc/en/software)
-
-### **2️⃣ Launch the Arduino Application**
-After installation, open the Arduino IDE.
-
-### **3️⃣ Add Seeed Studio XIAO nRF52840 (Sense) Board Package**
-To add support for the XIAO nRF52840 (Sense) board:
-
-1. Open **Arduino IDE** and navigate to **File** > **Preferences**.
-2. In the **"Additional Boards Manager URLs"** field, add the following URL:
-   ```
-   https://files.seeedstudio.com/arduino/package_seeeduino_boards_index.json
-   ```
-3. Click **OK** and restart the Arduino IDE if necessary.
-4. Go to **Tools** > **Board** > **Boards Manager** and search for "Seeed nRF52 Boards".
-5. Install the package for XIAO nRF52840 (Sense).
+This repository contains the source code and configuration files for the **EMG_BLE** project, which integrates Electromyography (EMG) signal acquisition with Bluetooth Low Energy (BLE) communication. The project is designed to collect EMG signals, process them, and transmit the data wirelessly using BLE.
 
 ---
 
-## **🔗 Useful Links**
+## 📂 Repository Structure
 
-- 📖 **XIAO BLE Wiki**: [Seeed Studio XIAO BLE Documentation](https://wiki.seeedstudio.com/XIAO_BLE/)
-- 🛠 **Arduino IDE**: [Download & Install](https://www.arduino.cc/en/software)
-- 📡 **BLE Communication Guide**: [Send/Receive Data with XIAO BLE](https://how2electronics.com/send-receive-data-to-mobile-app-with-xiao-ble-nrf52840-sense/)
-- 📘 **BLE Scanning, Connecting & Reading Services**: [ESP-IDF GATT Client Guide](https://github.com/espressif/esp-idf/blob/master/examples/bluetooth/bluedroid/ble/gatt_client/tutorial/Gatt_Client_Example_Walkthrough.md)
-
----
-
-## **⚙️ Butterworth Filter Design**
-
-This project uses a **1st-order Butterworth bandpass filter** with:
-- **Corner Frequencies**: 70 Hz - 400 Hz
-- **Sample Rate**: 2000 Hz
-
-To generate your own filter coefficients, use this online tool:  
-🔗 [Butterworth Code Generator](http://www.piclist.com/techref/uk/ac/york/cs/www-users/http/~fisher/mkfilter/trad.html)
+### **Main Directories**
+- **`emg_nrf_ses/`**: Contains the Nordic Semiconductor nRF SDK-based implementation for BLE communication and EMG signal processing.
+  - **`project/ble_peripheral/ble_app_blinky/`**: Example BLE peripheral application with custom EMG service integration.
+  - **`components/`**: Includes BLE services, libraries, and SoftDevice headers for BLE stack integration.
+  - **`config/`**: Configuration files for various nRF devices (e.g., nRF52810, nRF52820, nRF52832, nRF52840).
+  - **`modules/`**: Contains Nordic-specific modules like `nrfx` for hardware abstraction.
+- **`emgBLE/`**: Arduino-based implementation for EMG signal acquisition and processing using I2C communication with an ADS112 sensor.
+- **`.gitignore`**: Specifies files and directories to be ignored by Git.
 
 ---
 
-🚀 **Now you're ready to start developing!** Happy coding! 🎸
+## 🛠 Features
+
+### **BLE Services**
+- **Custom EMG Service**:
+  - **EMG Characteristic**: Notifies EMG signal data.
+  - **Gain Characteristic**: Allows configuration of the EMG signal gain.
+- **Heart Rate Service (HRS)**: Example BLE service for reference.
+
+### **EMG Signal Processing**
+- **Butterworth Bandpass Filter**: Filters raw EMG signals to remove noise and extract relevant frequency components.
+- **ADS112 Sensor Integration**: Reads raw EMG signals via I2C.
+
+### **BLE Communication**
+- BLE advertising and connection management using Nordic's SoftDevice stack.
+- Support for multiple BLE configurations (e.g., GAP, GATT, L2CAP).
+
+---
+
+## 🚀 Getting Started
+
+### **1️⃣ Prerequisites**
+- **Hardware**:
+  - Nordic nRF52840 Development Kit (or compatible board).
+  - ADS112 sensor for EMG signal acquisition.
+- **Software**:
+  - [SEGGER Embedded Studio](https://www.segger.com/products/development-tools/embedded-studio/) for nRF SDK projects.
+  - [Arduino IDE](https://www.arduino.cc/en/software) for Arduino-based implementation.
+
+### **2️⃣ Setup**
+1. Clone the repository:
+   ```bash
+   git clone https://github.com/<your-username>/EMG_BLE.git
