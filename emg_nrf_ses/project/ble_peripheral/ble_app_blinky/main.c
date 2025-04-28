@@ -404,7 +404,7 @@ static void idle_state_handle(void)
 #define DS3502_RES_10K_OHM     0x7F  // ~10.0 kΩ
 
 // === Desired Resistance Setting ===
-#define DEFAULT_RESITANCE      DS3502_RES_5K_OHM
+#define DEFAULT_RESITANCE      DS3502_RES_1K_OHM
 #define RESISTANCE_SETTING     DEFAULT_RESITANCE
 volatile uint8_t gain_level = 10;
 
@@ -609,15 +609,15 @@ int main(void) {
     led_init();
     timers_init();
     // power_management_init();
-    ble_stack_init();
-    gap_params_init();
-    gatt_init();
-    services_init();
-    advertising_init();
-    conn_params_init();
-    // Start execution.
-    NRF_LOG_INFO("Blinky example started.");
-    advertising_start();
+    //ble_stack_init();
+    //gap_params_init();
+    //gatt_init();
+    //services_init();
+    //advertising_init();
+    //conn_params_init();
+    //// Start execution.
+    //NRF_LOG_INFO("Blinky example started.");
+    //advertising_start();
     
     micros_timer_init();
     led_init();
@@ -657,16 +657,16 @@ int main(void) {
     //Loop principal while
     while (1) {
 
-        if (gain_level >= 1 && gain_level <= 10) 
-        {
-        // Mapeia de 1–10 para valor de resistência
-        uint8_t wiper_value = (gain_level - 1) * 0x0D; // exemplo linear
-        ds3502_set_resistance(&m_twi, wiper_value);
-        }
+        //if (gain_level >= 1 && gain_level <= 10) 
+        //{
+        //// Mapeia de 1–10 para valor de resistência
+        //uint8_t wiper_value = (gain_level - 1) * 0x0D; // exemplo linear
+        //ds3502_set_resistance(&m_twi, wiper_value);
+        //}
 
         if (ads112c04_read_data(&m_twi, &raw_data)) {
-            int16_t data = remove_offset(raw_data);
-            float filtered = butterworth_filter((int16_t)data);
+            //int16_t data = remove_offset(raw_data);
+            float filtered = butterworth_filter((float)raw_data);
             fifo_push((int16_t)(filtered)); // opcional: converte para mV se quiser
         }
 
@@ -675,9 +675,9 @@ int main(void) {
             snprintf(buf, sizeof(buf), "%d\r\n", out_sample);
             uart_print_async(buf);
             // === Enviar via BLE ===
-            if (m_conn_handle != BLE_CONN_HANDLE_INVALID) {
-                ble_emg_service_notify(&m_emg_service, m_emg_service.conn_handle, (uint16_t)out_sample);
-            }
+            //if (m_conn_handle != BLE_CONN_HANDLE_INVALID) {
+            //    ble_emg_service_notify(&m_emg_service, m_emg_service.conn_handle, (uint16_t)out_sample);
+            //}
         }
 
         uint32_t currentMillis = getMillis();
