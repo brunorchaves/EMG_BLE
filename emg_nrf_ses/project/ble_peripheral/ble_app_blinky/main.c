@@ -609,15 +609,15 @@ int main(void) {
     led_init();
     timers_init();
     // power_management_init();
-    //ble_stack_init();
-    //gap_params_init();
-    //gatt_init();
-    //services_init();
-    //advertising_init();
-    //conn_params_init();
+    ble_stack_init();
+    gap_params_init();
+    gatt_init();
+    services_init();
+    advertising_init();
+    conn_params_init();
     //// Start execution.
     //NRF_LOG_INFO("Blinky example started.");
-    //advertising_start();
+    advertising_start();
     
     micros_timer_init();
     led_init();
@@ -645,17 +645,18 @@ int main(void) {
     }
     uart_print_async("ADS112C04 configured.\r\n");
     // Configura resistência do DS3502
-    if (ds3502_set_resistance(&m_twi, RESISTANCE_SETTING)) {
-        uart_print_async("DS3502 resistance set successfully.\r\n");
-    } else {
-        uart_print_async("Failed to set DS3502 resistance.\r\n");
-    }
+    //if (ds3502_set_resistance(&m_twi, RESISTANCE_SETTING)) {
+    //    uart_print_async("DS3502 resistance set successfully.\r\n");
+    //} else {
+    //    uart_print_async("Failed to set DS3502 resistance.\r\n");
+    //}
     uint32_t lastBlinkTime = 0;
     const uint32_t blinkInterval = 1000;
     int16_t raw_data = 0;
     int16_t out_sample = 0;
     //Loop principal while
-    while (1) {
+    while (1)
+    {
 
         //if (gain_level >= 1 && gain_level <= 10) 
         //{
@@ -664,8 +665,8 @@ int main(void) {
         //ds3502_set_resistance(&m_twi, wiper_value);
         //}
 
-        if (ads112c04_read_data(&m_twi, &raw_data)) {
-            //int16_t data = remove_offset(raw_data);
+        if (ads112c04_read_data(&m_twi, &raw_data)) 
+        {
             float filtered = butterworth_filter((float)raw_data);
             fifo_push((int16_t)(filtered)); // opcional: converte para mV se quiser
         }
@@ -675,9 +676,9 @@ int main(void) {
             snprintf(buf, sizeof(buf), "%d\r\n", out_sample);
             uart_print_async(buf);
             // === Enviar via BLE ===
-            //if (m_conn_handle != BLE_CONN_HANDLE_INVALID) {
-            //    ble_emg_service_notify(&m_emg_service, m_emg_service.conn_handle, (uint16_t)out_sample);
-            //}
+            if (m_conn_handle != BLE_CONN_HANDLE_INVALID) {
+                ble_emg_service_notify(&m_emg_service, m_emg_service.conn_handle, (uint16_t)out_sample);
+            }
         }
 
         uint32_t currentMillis = getMillis();

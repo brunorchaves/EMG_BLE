@@ -48,7 +48,7 @@
  </TraceWindow>
  <Watch1>
   <Watches active="1" update="Never">
-   <Watchpoint expression="addr" name="addr" radix="-1" linenumber="737" filename="../../../main.c"/>
+   <Watchpoint expression="addr" name="addr" radix="-1" linenumber="738" filename="../../../main.c"/>
    <Watchpoint expression="err_code" name="err_code" radix="-1" linenumber="662" filename="../../../../../../modules/nrfx/drivers/src/nrfx_twi.c"/>
   </Watches>
  </Watch1>
@@ -62,7 +62,7 @@
   <Watches active="0" update="Never"/>
  </Watch4>
  <Files>
-  <SessionOpenFile windowGroup="DockEditLeft" x="0" y="283" useTextEdit="1" path="../../../main.c" left="0" selected="1" top="258" codecName="Default"/>
+  <SessionOpenFile windowGroup="DockEditLeft" x="15" y="622" useTextEdit="1" path="../../../main.c" left="0" selected="1" top="606" codecName="Default"/>
   <SessionOpenFile windowGroup="DockEditLeft" x="18" y="4" useTextEdit="1" path="ADS112C04.c" left="0" top="0" codecName="Default"/>
   <SessionOpenFile windowGroup="DockEditLeft" x="33" y="11642" useTextEdit="1" path="../config/sdk_config.h" left="0" top="11623" codecName="Default"/>
   <SessionOpenFile windowGroup="DockEditLeft" x="0" y="0" useTextEdit="1" path="../../../../../../modules/nrfx/hal/nrf_gpio.h" left="0" top="0" codecName="Default"/>
