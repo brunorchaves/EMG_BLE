@@ -3,7 +3,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 # === CONFIGURAÇÕES ===
-ARQUIVO_CSV = 'emg_5s.csv'
+ARQUIVO_CSV = 'biceps_10s_6.csv'  # Altere para o nome do arquivo CSV
 TAXA_AMOSTRAGEM = 2000  # Hz (ajuste conforme necessário)
 
 def plotar_csv(nome_arquivo):

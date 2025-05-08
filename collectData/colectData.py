@@ -5,8 +5,8 @@ import csv
 # === CONFIGURAÇÕES ===
 PORTA_SERIAL = 'COM57'         # Altere para a porta correta
 BAUDRATE = 115200
-TEMPO_COLETA = 5              # segundos
-ARQUIVO_SAIDA = 'emg_5s.csv'
+TEMPO_COLETA = 10              # segundos
+ARQUIVO_SAIDA = 'biceps_10s_7.csv'
 
 def ler_serial_por_5s(ser):
     print(f"\n[INFO] Coletando dados por {TEMPO_COLETA} segundos...")
