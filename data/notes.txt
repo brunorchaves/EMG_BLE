@@ -1,0 +1,7 @@
+clinical
+biceps_20s_2_clinical.csv
+thigh_20s_1_clinical.csv
+
+proprietary
+biceps_10s_4_proprietary.csv
+thigh_5s_2_1x_proprietary.csv
