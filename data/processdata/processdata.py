@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
 """
-▶ Figura 1  (signals_prop.png)
+▶ Figura 1  (sinais_proprietario_5s.png)
     • Sinais de contração (Coxa e Tríceps) do sensor proprietário (somente 5 s)
-▶ Figura 2  (signals_clin.png)
+▶ Figura 2  (sinais_clinico_5s.png)
     • Sinais de contração (Coxa e Tríceps) do circuito clínico (somente 5 s)
-▶ Figura 3  (fft_prop.png)
+▶ Figura 3  (fft_proprietario.png)
     • FFT dos sinais do sensor proprietário (sinal completo)
-▶ Figura 4  (fft_clin.png)
+▶ Figura 4  (fft_clinico.png)
     • FFT dos sinais do circuito clínico (sinal completo)
 """
 
@@ -114,7 +114,7 @@ for ax, key in zip(axs1, ["biceps_prop", "thigh_prop"]):
     ax.legend(fontsize=8)
 fig1.suptitle("Sinais de Contração (5 s) – Sensor Proprietário")
 plt.tight_layout()
-fig1_path = BASEDIR / "signals_prop.png"
+fig1_path = BASEDIR / "sinais_proprietario_5s.png"
 fig1.savefig(fig1_path, dpi=300)
 print(f"Figura 1 salva em: {fig1_path}")
 
@@ -139,7 +139,7 @@ for ax, key in zip(axs2, ["biceps_clin", "thigh_clin"]):
     ax.legend(fontsize=8)
 fig2.suptitle("Sinais de Contração (5 s) – Circuito Clínico")
 plt.tight_layout()
-fig2_path = BASEDIR / "signals_clin.png"
+fig2_path = BASEDIR / "sinais_clinico_5s.png"
 fig2.savefig(fig2_path, dpi=300)
 print(f"Figura 2 salva em: {fig2_path}")
 
@@ -156,7 +156,7 @@ ax3.set_ylabel("|X(f)| (a.u.)")
 ax3.set_xlim(0, fs / 2)
 ax3.legend()
 ax3.grid(alpha=0.3)
-fig3_path = BASEDIR / "fft_prop.png"
+fig3_path = BASEDIR / "fft_proprietario.png"
 fig3.savefig(fig3_path, dpi=300)
 print(f"Figura 3 salva em: {fig3_path}")
 
@@ -173,7 +173,7 @@ ax4.set_ylabel("|X(f)| (a.u.)")
 ax4.set_xlim(0, fs / 2)
 ax4.legend()
 ax4.grid(alpha=0.3)
-fig4_path = BASEDIR / "fft_clin.png"
+fig4_path = BASEDIR / "fft_clinico.png"
 fig4.savefig(fig4_path, dpi=300)
 print(f"Figura 4 salva em: {fig4_path}")
 
