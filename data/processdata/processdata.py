@@ -27,10 +27,18 @@ FILES = {
 
 fs  = 2000   # Hz
 fc  = 5      # Hz – corte low-pass da envoltória
-thr_default = 0.20   # limiar padrão
-thr_biceps_prop = 0.35  # limiar mais alto para biceps proprietário
-show_duration = 5.0  # segundos exibidos nos gráficos de sinais
+thr_default = 0.20        # limiar padrão
+thr_biceps_prop = 0.35    # limiar mais alto para bíceps proprietário
+show_duration = 5.0       # segundos exibidos nos gráficos de sinais
 b, a = butter(4, fc / (fs / 2), btype="low")
+
+# Rótulos para títulos dos subplots
+TITLES = {
+    "biceps_prop": "Bíceps – 5 segundos de coleta",
+    "thigh_prop":  "Coxa – 5 segundos de coleta",
+    "biceps_clin": "Bíceps – 5 segundos de coleta",
+    "thigh_clin":  "Coxa – 5 segundos de coleta",
+}
 
 # ------------------------- FUNÇÕES AUXILIARES ------------------------------ #
 def load_signal(p: Path):
@@ -74,15 +82,14 @@ for key, fname in FILES.items():
     t, raw = load_signal(path)
     x = preprocess(raw)
     env = smooth_env(x)
-    # Escolhe limiar de acordo com o sinal
+    # Define limiar: maior para bíceps proprietário
     thr = thr_biceps_prop if key == "biceps_prop" else thr_default
     snr = snr_db(x, env, thr)
     processed[key] = x
-    signals_info[key] = (t, x, env, snr, path.stem, thr)
+    signals_info[key] = (t, x, env, snr, thr)
 
 # ------------------------- FUNÇÃO PARA LIMITAR DURAÇÃO --------------------- #
 def crop_to_duration(t, x, env, duration):
-    """Mantém apenas 'duration' segundos do sinal."""
     mask = t <= duration
     return t[mask], x[mask], env[mask]
 
@@ -92,7 +99,7 @@ for ax, key in zip(axs1, ["biceps_prop", "thigh_prop"]):
     if key not in signals_info:
         ax.text(0.5, 0.5, "Arquivo não encontrado", ha="center", va="center")
         continue
-    t, x, env, snr, title, thr = signals_info[key]
+    t, x, env, snr, thr = signals_info[key]
     t, x, env = crop_to_duration(t, x, env, show_duration)
     ax.fill_between(t, -1, 1, where=env > thr, color="gold", alpha=0.15, step="mid")
     ax.plot(t, x,   color="#1f77b4", alpha=0.5, label="Sinal EMG Normalizado")
@@ -101,11 +108,11 @@ for ax, key in zip(axs1, ["biceps_prop", "thigh_prop"]):
     ax.text(0.02, 0.92, f"SNR ≈ {snr:.1f} dB",
             transform=ax.transAxes, fontsize=10,
             bbox=dict(boxstyle="round,pad=0.3", fc="white", alpha=0.8))
-    ax.set_title(title)
+    ax.set_title(TITLES.get(key, key))
     ax.set_xlabel("Tempo (s)")
     ax.set_ylabel("Amp. (norm.)")
     ax.legend(fontsize=8)
-fig1.suptitle("Sinais de Contração (5 s) – Sensor Proprietário (Coxa e Tríceps)")
+fig1.suptitle("Sinais de Contração (5 s) – Sensor Proprietário")
 plt.tight_layout()
 fig1_path = BASEDIR / "signals_prop.png"
 fig1.savefig(fig1_path, dpi=300)
@@ -117,7 +124,7 @@ for ax, key in zip(axs2, ["biceps_clin", "thigh_clin"]):
     if key not in signals_info:
         ax.text(0.5, 0.5, "Arquivo não encontrado", ha="center", va="center")
         continue
-    t, x, env, snr, title, thr = signals_info[key]
+    t, x, env, snr, thr = signals_info[key]
     t, x, env = crop_to_duration(t, x, env, show_duration)
     ax.fill_between(t, -1, 1, where=env > thr, color="gold", alpha=0.15, step="mid")
     ax.plot(t, x,   color="#1f77b4", alpha=0.5, label="Sinal EMG Normalizado")
@@ -126,11 +133,11 @@ for ax, key in zip(axs2, ["biceps_clin", "thigh_clin"]):
     ax.text(0.02, 0.92, f"SNR ≈ {snr:.1f} dB",
             transform=ax.transAxes, fontsize=10,
             bbox=dict(boxstyle="round,pad=0.3", fc="white", alpha=0.8))
-    ax.set_title(title)
+    ax.set_title(TITLES.get(key, key))
     ax.set_xlabel("Tempo (s)")
     ax.set_ylabel("Amp. (norm.)")
     ax.legend(fontsize=8)
-fig2.suptitle("Sinais de Contração (5 s) – Circuito Clínico (Coxa e Tríceps)")
+fig2.suptitle("Sinais de Contração (5 s) – Circuito Clínico")
 plt.tight_layout()
 fig2_path = BASEDIR / "signals_clin.png"
 fig2.savefig(fig2_path, dpi=300)
