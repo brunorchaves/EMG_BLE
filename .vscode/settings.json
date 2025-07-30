@@ -15,6 +15,10 @@
     "files.associations": {
         "nrf_log_default_backends.h": "c",
         "nrf_ble_gatt.h": "c",
-        "ble_advdata.h": "c"
+        "ble_advdata.h": "c",
+        "ble_gap.h": "c",
+        "nrf_log_ctrl.h": "c",
+        "ble_emg_service.h": "c",
+        "ble_srv_common.h": "c"
     }
 }
