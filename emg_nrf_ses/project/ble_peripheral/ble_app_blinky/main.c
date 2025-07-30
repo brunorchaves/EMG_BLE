@@ -277,7 +277,6 @@ static void ble_evt_handler(ble_evt_t const * p_ble_evt, void * p_context)
             
             m_conn_handle = BLE_CONN_HANDLE_INVALID;
             m_emg_service.conn_handle = BLE_CONN_HANDLE_INVALID; // <-- Aqui também
-            APP_ERROR_CHECK(err_code);
             advertising_start();
             break;
 
