@@ -40,12 +40,12 @@
 #define DEVICE_NAME                     "EMG_BLE"
 #define APP_BLE_OBSERVER_PRIO           3
 #define APP_BLE_CONN_CFG_TAG            1
-#define APP_ADV_INTERVAL                64
+#define APP_ADV_INTERVAL                256
 #define APP_ADV_DURATION                BLE_GAP_ADV_TIMEOUT_GENERAL_UNLIMITED
 
 #define MIN_CONN_INTERVAL               MSEC_TO_UNITS(100, UNIT_1_25_MS)
 #define MAX_CONN_INTERVAL               MSEC_TO_UNITS(200, UNIT_1_25_MS)
-#define SLAVE_LATENCY                   0
+#define SLAVE_LATENCY                   1
 #define CONN_SUP_TIMEOUT                MSEC_TO_UNITS(4000, UNIT_10_MS)
 
 #define FIRST_CONN_PARAMS_UPDATE_DELAY  (20000 / 0.32768) // Substituindo APP_TIMER_TICKS
@@ -65,6 +65,17 @@ static uint16_t m_conn_handle = BLE_CONN_HANDLE_INVALID;
 static uint8_t m_adv_handle = BLE_GAP_ADV_SET_HANDLE_NOT_SET;
 static uint8_t m_enc_advdata[BLE_GAP_ADV_SET_DATA_SIZE_MAX];
 static uint8_t m_enc_scan_response_data[BLE_GAP_ADV_SET_DATA_SIZE_MAX];
+
+
+#define TX_POWER_DBM   -20  // escolha: -40, -20, -16, -12, -8, -4, 0, +2, +3, +4, +5, +6, +7, +8
+
+void ble_set_tx_power_adv(void) {
+    ret_code_t err_code;
+    err_code = sd_ble_gap_tx_power_set(BLE_GAP_TX_POWER_ROLE_ADV,
+                                       m_adv_handle,   // handle do advertising
+                                       TX_POWER_DBM);
+    APP_ERROR_CHECK(err_code);
+}
 
 static ble_gap_adv_data_t m_adv_data =
 {
@@ -267,7 +278,10 @@ static void ble_evt_handler(ble_evt_t const * p_ble_evt, void * p_context)
             err_code = nrf_ble_qwr_conn_handle_assign(&m_qwr, m_conn_handle);
             APP_ERROR_CHECK(err_code);
             m_emg_service.conn_handle = m_conn_handle; // <-- Aqui!
-            
+            // Reduz potência também para a conexão
+            sd_ble_gap_tx_power_set(BLE_GAP_TX_POWER_ROLE_CONN,
+                            m_conn_handle,
+                            TX_POWER_DBM);
             APP_ERROR_CHECK(err_code);
             break;
 
@@ -278,6 +292,8 @@ static void ble_evt_handler(ble_evt_t const * p_ble_evt, void * p_context)
             m_conn_handle = BLE_CONN_HANDLE_INVALID;
             m_emg_service.conn_handle = BLE_CONN_HANDLE_INVALID; // <-- Aqui também
             advertising_start();
+            ble_set_tx_power_adv();   // aplica potência reduzida
+
             break;
 
         case BLE_GAP_EVT_SEC_PARAMS_REQUEST:
@@ -411,6 +427,8 @@ static void idle_state_handle(void)
 #define RESISTANCE_SETTING     DEFAULT_RESITANCE
 volatile uint8_t gain_level = 10;
 
+bool g_uartInitialized = false;
+
 bool ds3502_set_resistance(nrfx_twi_t *twi, uint8_t value) {
     if (value > 0x7F) value = 0x7F;
 
@@ -510,23 +528,28 @@ void uart_init(void) {
         .interrupt_priority = NRFX_UART_DEFAULT_CONFIG_IRQ_PRIORITY
     };
     nrfx_uart_init(&m_uart, &config, uart_handler);
+    g_uartInitialized = true;
 }
 
 void uart_print_async(const char *str) {
+    
     size_t len = strlen(str);
-    if (len < sizeof(m_uart_buffer[0])) {
-        uint8_t next_head = (m_uart_buffer_head + 1) % UART_BUFFER_SIZE;
-        if (next_head != m_uart_buffer_tail) {
-            memcpy(m_uart_buffer[m_uart_buffer_head], str, len + 1);
-            m_uart_buffer_head = next_head;
+    if(g_uartInitialized)
+    {
+      if (len < sizeof(m_uart_buffer[0])) {
+          uint8_t next_head = (m_uart_buffer_head + 1) % UART_BUFFER_SIZE;
+          if (next_head != m_uart_buffer_tail) {
+              memcpy(m_uart_buffer[m_uart_buffer_head], str, len + 1);
+              m_uart_buffer_head = next_head;
 
-            if (!m_tx_busy) {
-                m_tx_busy = true;
-                size_t chunk_size = strlen((const char *)m_uart_buffer[m_uart_buffer_tail]);
-                nrfx_uart_tx(&m_uart, m_uart_buffer[m_uart_buffer_tail], chunk_size);
-                m_uart_buffer_tail = (m_uart_buffer_tail + 1) % UART_BUFFER_SIZE;
-            }
-        }
+              if (!m_tx_busy) {
+                  m_tx_busy = true;
+                  size_t chunk_size = strlen((const char *)m_uart_buffer[m_uart_buffer_tail]);
+                  nrfx_uart_tx(&m_uart, m_uart_buffer[m_uart_buffer_tail], chunk_size);
+                  m_uart_buffer_tail = (m_uart_buffer_tail + 1) % UART_BUFFER_SIZE;
+              }
+          }
+      }
     }
 }
 
@@ -612,6 +635,7 @@ enum
     EVENT_START_ADVERTISING,
     EVENT_WAIT_FOR_CONNECTION,
     EVENT_MAIN_LOOP,
+    EVENT_DISCONNECTED,
 };
 
 // === Main ===
@@ -624,60 +648,61 @@ int main(void)
     int16_t out_sample = 0;
     bool static isInitialized = false;
     // Initialize.
-    log_init();
-    led_init();
-    timers_init();
-    //power_management_init();
-    ble_stack_init();
-    gap_params_init();
-    gatt_init();
-    services_init();
-    advertising_init();
-    conn_params_init();
-    advertising_start();
-    //// Start execution.
-    //NRF_LOG_INFO("Blinky example started.");
-    
-    micros_timer_init();
-    led_init();
-    gpio_init();
-    uart_init();
-    uart_print_async("\r\nSystem Booting...\r\n");
-    
-    twi_init();
-    uart_print_async("TWI initialized.\r\n");
-    i2c_scan(); 
-    check_ads112c04();
-    
-    uart_print_async("Initializing ADS112C04...\r\n");
-    if (!ads112c04_init(&m_twi)) {
-        uart_print_async("Failed to reset ADS112C04.\r\n");
-        while (1);
-    }
-    uart_print_async("ADS112C04 reset successful.\r\n");
-
-    uart_print_async("Configuring ADS112C04 raw mode...\r\n");
-    if (!ads112c04_configure_raw_mode(&m_twi)) {
-        uart_print_async("Failed to configure ADS112C04.\r\n");
-        while (1);
-    }
-    uart_print_async("ADS112C04 configured.\r\n");
-    // Configura resistência do DS3502
-    //if (ds3502_set_resistance(&m_twi, RESISTANCE_SETTING)) {
-    //    uart_print_async("DS3502 resistance set successfully.\r\n");
-    //} else {
-    //    uart_print_async("Failed to set DS3502 resistance.\r\n");
-    //}
-    isInitialized = true;
+   
     while (1)
     {
         switch (state_event)
         {
             case EVENT_INITIALIZE:
-                    if(isInitialized)
-                    {
-                        state_event = EVENT_START_ADVERTISING;
-                    }
+                 log_init();
+                //led_init();
+                timers_init();
+                //power_management_init();
+                ble_stack_init();
+                gap_params_init();
+                gatt_init();
+                services_init();
+                advertising_init();
+                conn_params_init();
+                advertising_start();
+                //// Start execution.
+                //NRF_LOG_INFO("Blinky example started.");
+    
+                micros_timer_init();
+                // led_init();
+                gpio_init();
+                //uart_init();
+                uart_print_async("\r\nSystem Booting...\r\n");
+    
+                twi_init();
+                uart_print_async("TWI initialized.\r\n");
+                i2c_scan(); 
+                check_ads112c04();
+    
+                uart_print_async("Initializing ADS112C04...\r\n");
+                if (!ads112c04_init(&m_twi)) {
+                    uart_print_async("Failed to reset ADS112C04.\r\n");
+                    while (1);
+                }
+                uart_print_async("ADS112C04 reset successful.\r\n");
+
+                uart_print_async("Configuring ADS112C04 raw mode...\r\n");
+                if (!ads112c04_configure_raw_mode(&m_twi)) {
+                    uart_print_async("Failed to configure ADS112C04.\r\n");
+                    while (1);
+                }
+                uart_print_async("ADS112C04 configured.\r\n");
+                // Configura resistência do DS3502
+                //if (ds3502_set_resistance(&m_twi, RESISTANCE_SETTING)) {
+                //    uart_print_async("DS3502 resistance set successfully.\r\n");
+                //} else {
+                //    uart_print_async("Failed to set DS3502 resistance.\r\n");
+                //}
+                isInitialized = true;
+                if(isInitialized)
+                {
+                    state_event = EVENT_START_ADVERTISING;
+                }
                 break;
             case EVENT_START_ADVERTISING:
                 
@@ -685,6 +710,7 @@ int main(void)
                 break;
             case EVENT_WAIT_FOR_CONNECTION:
                 // Wait for connection
+                
                 if(g_bleConnected)
                 {
                     state_event = EVENT_MAIN_LOOP;
@@ -708,23 +734,30 @@ int main(void)
                     }
                 }
 
-                uint32_t currentMillis = getMillis();
-                if (currentMillis - lastBlinkTime >= blinkInterval) {
-                    lastBlinkTime = currentMillis;
-                    nrf_gpio_pin_toggle(LED_PIN);
-                }
+                // uint32_t currentMillis = getMillis();
+                // if (currentMillis - lastBlinkTime >= blinkInterval) {
+                //     lastBlinkTime = currentMillis;
+                //     nrf_gpio_pin_toggle(LED_PIN);
+                // }
                 if(!g_bleConnected)
                 {
-                    state_event = EVENT_START_ADVERTISING;
+                     state_event = EVENT_START_ADVERTISING;
                 }
                 break;
+                case EVENT_DISCONNECTED:
+                  nrfx_timer_disable(&micros_timer);
+                  nrfx_twi_disable(&m_twi);
+                  //nrfx_uart_uninit(&m_uart);
+                  state_event = EVENT_INITIALIZE;
+                  break;
 
             
             default:
                 break;
         }
         //idle_state_handle();   // ou sd_app_evt_wait();
+        sd_app_evt_wait();
     }
-
+    
    return 0;
 }
