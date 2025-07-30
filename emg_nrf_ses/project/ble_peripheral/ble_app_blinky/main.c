@@ -57,6 +57,7 @@
 NRF_BLE_GATT_DEF(m_gatt);
 NRF_BLE_QWR_DEF(m_qwr);
 
+volatile bool g_bleConnected = false;
 ble_emg_service_t m_emg_service; // Instância do serviço EMG manualmente declarada
 
 static uint16_t m_conn_handle = BLE_CONN_HANDLE_INVALID;
@@ -258,6 +259,8 @@ static void ble_evt_handler(ble_evt_t const * p_ble_evt, void * p_context)
     switch (p_ble_evt->header.evt_id)
     {
         case BLE_GAP_EVT_CONNECTED:
+            g_bleConnected = true;
+
             NRF_LOG_INFO("Connected");
             
             m_conn_handle = p_ble_evt->evt.gap_evt.conn_handle;
@@ -269,6 +272,7 @@ static void ble_evt_handler(ble_evt_t const * p_ble_evt, void * p_context)
             break;
 
         case BLE_GAP_EVT_DISCONNECTED:
+            g_bleConnected = false;
             NRF_LOG_INFO("Disconnected");
             
             m_conn_handle = BLE_CONN_HANDLE_INVALID;
@@ -602,22 +606,38 @@ void check_ads112c04(void) {
     uart_print_async("ADS112C04 not detected at 0x40 or 0x41.\r\n");
 }
 
+
+enum
+{
+    EVENT_INITIALIZE=0,
+    EVENT_START_ADVERTISING,
+    EVENT_WAIT_FOR_CONNECTION,
+    EVENT_MAIN_LOOP,
+};
+
 // === Main ===
-int main(void) {
+int main(void) 
+{
+    static uint8_t state_event = EVENT_INITIALIZE;
+    uint32_t lastBlinkTime = 0;
+    const uint32_t blinkInterval = 1000;
+    int16_t raw_data = 0;
+    int16_t out_sample = 0;
+    bool static isInitialized = false;
     // Initialize.
     log_init();
     led_init();
     timers_init();
-    // power_management_init();
+    //power_management_init();
     ble_stack_init();
     gap_params_init();
     gatt_init();
     services_init();
     advertising_init();
     conn_params_init();
+    advertising_start();
     //// Start execution.
     //NRF_LOG_INFO("Blinky example started.");
-    advertising_start();
     
     micros_timer_init();
     led_init();
@@ -627,7 +647,6 @@ int main(void) {
     
     twi_init();
     uart_print_async("TWI initialized.\r\n");
-
     i2c_scan(); 
     check_ads112c04();
     
@@ -650,41 +669,63 @@ int main(void) {
     //} else {
     //    uart_print_async("Failed to set DS3502 resistance.\r\n");
     //}
-    uint32_t lastBlinkTime = 0;
-    const uint32_t blinkInterval = 1000;
-    int16_t raw_data = 0;
-    int16_t out_sample = 0;
-    //Loop principal while
+    isInitialized = true;
     while (1)
     {
-
-        //if (gain_level >= 1 && gain_level <= 10) 
-        //{
-        //// Mapeia de 1–10 para valor de resistência
-        //uint8_t wiper_value = (gain_level - 1) * 0x0D; // exemplo linear
-        //ds3502_set_resistance(&m_twi, wiper_value);
-        //}
-
-        if (ads112c04_read_data(&m_twi, &raw_data)) 
+        switch (state_event)
         {
-            float filtered = butterworth_filter((float)raw_data);
-            fifo_push((int16_t)(filtered)); // opcional: converte para mV se quiser
-        }
+            case EVENT_INITIALIZE:
+                    if(isInitialized)
+                    {
+                        state_event = EVENT_START_ADVERTISING;
+                    }
+                break;
+            case EVENT_START_ADVERTISING:
+                
+                state_event = EVENT_WAIT_FOR_CONNECTION;
+                break;
+            case EVENT_WAIT_FOR_CONNECTION:
+                // Wait for connection
+                if(g_bleConnected)
+                {
+                    state_event = EVENT_MAIN_LOOP;
+                }
+                break;
+            case EVENT_MAIN_LOOP:
+                // Main loop
+                if (ads112c04_read_data(&m_twi, &raw_data)) 
+                {
+                    float filtered = butterworth_filter((float)raw_data);
+                    fifo_push((int16_t)(filtered)); // opcional: converte para mV se quiser
+                }
 
-        if (fifo_pop(&out_sample)) {
-            char buf[32];
-            snprintf(buf, sizeof(buf), "%d\r\n", out_sample);
-            uart_print_async(buf);
-            // === Enviar via BLE ===
-            if (m_conn_handle != BLE_CONN_HANDLE_INVALID) {
-                ble_emg_service_notify(&m_emg_service, m_emg_service.conn_handle, (uint16_t)out_sample);
-            }
-        }
+                if (fifo_pop(&out_sample)) {
+                    char buf[32];
+                    snprintf(buf, sizeof(buf), "%d\r\n", out_sample);
+                    uart_print_async(buf);
+                    // === Enviar via BLE ===
+                    if (m_conn_handle != BLE_CONN_HANDLE_INVALID) {
+                        ble_emg_service_notify(&m_emg_service, m_emg_service.conn_handle, (uint16_t)out_sample);
+                    }
+                }
 
-        uint32_t currentMillis = getMillis();
-        if (currentMillis - lastBlinkTime >= blinkInterval) {
-            lastBlinkTime = currentMillis;
-            nrf_gpio_pin_toggle(LED_PIN);
+                uint32_t currentMillis = getMillis();
+                if (currentMillis - lastBlinkTime >= blinkInterval) {
+                    lastBlinkTime = currentMillis;
+                    nrf_gpio_pin_toggle(LED_PIN);
+                }
+                if(!g_bleConnected)
+                {
+                    state_event = EVENT_START_ADVERTISING;
+                }
+                break;
+
+            
+            default:
+                break;
         }
+        //idle_state_handle();   // ou sd_app_evt_wait();
     }
+
+   return 0;
 }
