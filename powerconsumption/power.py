@@ -1,17 +1,17 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Current‑versus‑time analysis from an oscilloscope CSV.
+Current-versus-time analysis from an oscilloscope CSV.
 
 Destaca quatro modos (IDLE, CONNECTED, TRANSMITTING, OFF) e
-calcula a corrente RMS e a potência (5 V) de cada janela.
+calcula a corrente RMS e a potência (5 V) de cada janela.
 
 Operating windows
 -----------------
-IDLE           :  2.88 – 14.0 s   (publicando advertising, sem conexão)
-CONNECTED      : 14.0 – 26.4 s   (associado, sem streaming)
-TRANSMITTING   : 26.4 – 39.8 s   (notificações EMG ativas)
-SYSTEM OFF     :  0 – 2.88 s  e  ≥ 39.8 s
+IDLE           :  2.88 – 14.0 s   (publicando advertising, sem conexão)
+CONNECTED      : 14.0 – 26.4 s   (associado, sem streaming)
+TRANSMITTING   : 26.4 – 39.8 s   (notificações EMG ativas)
+SYSTEM OFF     :  0 – 2.88 s  e  ≥ 39.8 s
 """
 
 from pathlib import Path
@@ -36,9 +36,11 @@ COLORS = {
 # --------------------------------------------------------------------------- #
 def plot_current_from_csv(
     csv_path: str | Path,
+    *,
+    save_path: str | Path | None = None,   # ← novo parâmetro
     timestamp_col: int | None = None,
     signal_col: int | None = None,
-    gain: float = 10.0,            # ganho do shunt/op‑amp
+    gain: float = 10.0,            # ganho do shunt/op-amp
     v_supply: float = 5.0,         # tensão de alimentação
     min_valid_ratio: float = 0.5,
     time_label: str = "Time (s)",
@@ -64,7 +66,7 @@ def plot_current_from_csv(
     mask = lambda t0, t1: (time >= t0) & (time <= (time[-1] if np.isinf(t1) else t1))
 
     # -------------------------- REPORT -------------------------------------- #
-    print(f"Supply voltage: {v_supply:.2f} V\n")
+    print(f"Supply voltage: {v_supply:.2f} V\n")
 
     def report(label, windows):
         for i, (t0, t1) in enumerate(windows, 1):
@@ -72,7 +74,7 @@ def plot_current_from_csv(
             i_rms = rms(current_mA[mask(t0, t1)])
             print(
                 f"{label:<12}#{i:<2} ({rng}s): "
-                f"RMS {i_rms:6.3f} mA  →  {i_rms * v_supply:7.2f} mW"
+                f"RMS {i_rms:6.3f} mA  →  {i_rms * v_supply:7.2f} mW"
             )
 
     report("IDLE",          IDLE_WINDOWS)
@@ -114,8 +116,27 @@ def plot_current_from_csv(
     ax.set_ylabel(current_label)
     ax.grid(True)
     plt.tight_layout()
+
+    # --------------------- Salva, se solicitado ----------------------------- #
+    if save_path is not None:
+        save_path = Path(save_path)
+        # Se a extensão não for fornecida, força ".eps"
+        if save_path.suffix == "":
+            save_path = save_path.with_suffix(".eps")
+
+        fig.savefig(
+            save_path,
+            format=save_path.suffix.lstrip("."),
+            bbox_inches="tight",
+            dpi=300        # afeta só elementos raster, mas não atrapalha
+        )
+        print(f"Figura salva em: {save_path.resolve()}")
+
     plt.show()
 
 # --------------------------------------------------------------------------- #
 if __name__ == "__main__":
-    plot_current_from_csv("F0010CH1.CSV")
+    plot_current_from_csv(
+        "F0010CH1.CSV",              # ← seu arquivo CSV
+        save_path="corrente_vs_tempo.eps"  # ou None para não salvar
+    )
