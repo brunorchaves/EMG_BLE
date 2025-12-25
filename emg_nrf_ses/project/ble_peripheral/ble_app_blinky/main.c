@@ -26,6 +26,7 @@
 #include "nordic_common.h"
 #include "nrf.h"
 #include "app_error.h"
+#include "app_timer.h"
 #include "ble.h"
 #include "ble_err.h"
 #include "ble_hci.h"
@@ -86,12 +87,15 @@ void assert_nrf_callback(uint16_t line_num, const uint8_t * p_file_name)
 
 static void timers_init(void)
 {
+    NRF_LOG_INFO("Initializing timers...");
     // Initialize timer module, making it use the scheduler
     ret_code_t err_code = app_timer_init();
     APP_ERROR_CHECK(err_code);
+    NRF_LOG_INFO("Timers initialized successfully");
 }
 static void gap_params_init(void)
 {
+    NRF_LOG_INFO("Initializing GAP parameters...");
     ret_code_t              err_code;
     ble_gap_conn_params_t   gap_conn_params;
     ble_gap_conn_sec_mode_t sec_mode;
@@ -102,6 +106,7 @@ static void gap_params_init(void)
                                           (const uint8_t *)DEVICE_NAME,
                                           strlen(DEVICE_NAME));
     APP_ERROR_CHECK(err_code);
+    NRF_LOG_INFO("Device name set: %s", DEVICE_NAME);
 
     memset(&gap_conn_params, 0, sizeof(gap_conn_params));
 
@@ -112,12 +117,15 @@ static void gap_params_init(void)
 
     err_code = sd_ble_gap_ppcp_set(&gap_conn_params);
     APP_ERROR_CHECK(err_code);
+    NRF_LOG_INFO("GAP parameters configured successfully");
 }
 
 static void gatt_init(void)
 {
+    NRF_LOG_INFO("Initializing GATT...");
     ret_code_t err_code = nrf_ble_gatt_init(&m_gatt, NULL);
     APP_ERROR_CHECK(err_code);
+    NRF_LOG_INFO("GATT initialized successfully");
 }
 
 static void advertising_init(void)
@@ -239,10 +247,10 @@ static void advertising_start(void)
 {
     ret_code_t           err_code;
 
+    NRF_LOG_INFO("Starting BLE advertising...");
     err_code = sd_ble_gap_adv_start(m_adv_handle, APP_BLE_CONN_CFG_TAG);
     APP_ERROR_CHECK(err_code);
-
-    
+    NRF_LOG_INFO("Advertising started - device is discoverable");
 }
 
 
@@ -258,21 +266,27 @@ static void ble_evt_handler(ble_evt_t const * p_ble_evt, void * p_context)
     switch (p_ble_evt->header.evt_id)
     {
         case BLE_GAP_EVT_CONNECTED:
-            NRF_LOG_INFO("Connected");
-            
+            NRF_LOG_INFO("========================================");
+            NRF_LOG_INFO("BLE CONNECTED - handle: 0x%04x", p_ble_evt->evt.gap_evt.conn_handle);
+            NRF_LOG_INFO("========================================");
+
             m_conn_handle = p_ble_evt->evt.gap_evt.conn_handle;
             err_code = nrf_ble_qwr_conn_handle_assign(&m_qwr, m_conn_handle);
             APP_ERROR_CHECK(err_code);
-            m_emg_service.conn_handle = m_conn_handle; // <-- Aqui!
-            
+            m_emg_service.conn_handle = m_conn_handle;
+            NRF_LOG_INFO("EMG service connection handle assigned");
+
             APP_ERROR_CHECK(err_code);
             break;
 
         case BLE_GAP_EVT_DISCONNECTED:
-            NRF_LOG_INFO("Disconnected");
-            
+            NRF_LOG_INFO("========================================");
+            NRF_LOG_INFO("BLE DISCONNECTED - reason: 0x%02x",
+                         p_ble_evt->evt.gap_evt.params.disconnected.reason);
+            NRF_LOG_INFO("========================================");
+
             m_conn_handle = BLE_CONN_HANDLE_INVALID;
-            m_emg_service.conn_handle = BLE_CONN_HANDLE_INVALID; // <-- Aqui também
+            m_emg_service.conn_handle = BLE_CONN_HANDLE_INVALID;
             APP_ERROR_CHECK(err_code);
             advertising_start();
             break;
@@ -288,7 +302,7 @@ static void ble_evt_handler(ble_evt_t const * p_ble_evt, void * p_context)
 
         case BLE_GAP_EVT_PHY_UPDATE_REQUEST:
         {
-            NRF_LOG_DEBUG("PHY update request.");
+            NRF_LOG_INFO("PHY update request received");
             ble_gap_phys_t const phys =
             {
                 .rx_phys = BLE_GAP_PHY_AUTO,
@@ -296,17 +310,20 @@ static void ble_evt_handler(ble_evt_t const * p_ble_evt, void * p_context)
             };
             err_code = sd_ble_gap_phy_update(p_ble_evt->evt.gap_evt.conn_handle, &phys);
             APP_ERROR_CHECK(err_code);
+            NRF_LOG_INFO("PHY update completed");
         } break;
 
         case BLE_GATTS_EVT_SYS_ATTR_MISSING:
+            NRF_LOG_INFO("System attributes missing - initializing");
             // No system attributes have been stored.
             err_code = sd_ble_gatts_sys_attr_set(m_conn_handle, NULL, 0, 0);
             APP_ERROR_CHECK(err_code);
+            NRF_LOG_INFO("System attributes set");
             break;
 
         case BLE_GATTC_EVT_TIMEOUT:
             // Disconnect on GATT Client timeout event.
-            NRF_LOG_DEBUG("GATT Client Timeout.");
+            NRF_LOG_ERROR("GATT Client Timeout - disconnecting");
             err_code = sd_ble_gap_disconnect(p_ble_evt->evt.gattc_evt.conn_handle,
                                              BLE_HCI_REMOTE_USER_TERMINATED_CONNECTION);
             APP_ERROR_CHECK(err_code);
@@ -314,14 +331,19 @@ static void ble_evt_handler(ble_evt_t const * p_ble_evt, void * p_context)
 
         case BLE_GATTS_EVT_TIMEOUT:
             // Disconnect on GATT Server timeout event.
-            NRF_LOG_DEBUG("GATT Server Timeout.");
+            NRF_LOG_ERROR("GATT Server Timeout - disconnecting");
             err_code = sd_ble_gap_disconnect(p_ble_evt->evt.gatts_evt.conn_handle,
                                              BLE_HCI_REMOTE_USER_TERMINATED_CONNECTION);
             APP_ERROR_CHECK(err_code);
             break;
 
         default:
-            // No implementation needed.
+            // Log eventos BLE não tratados para debug
+            if (p_ble_evt->header.evt_id >= BLE_GAP_EVT_BASE && p_ble_evt->header.evt_id <= BLE_GAP_EVT_LAST) {
+                NRF_LOG_DEBUG("Unhandled GAP event: 0x%x", p_ble_evt->header.evt_id);
+            } else if (p_ble_evt->header.evt_id >= BLE_GATTS_EVT_BASE && p_ble_evt->header.evt_id <= BLE_GATTS_EVT_LAST) {
+                NRF_LOG_DEBUG("Unhandled GATTS event: 0x%x", p_ble_evt->header.evt_id);
+            }
             break;
     }
 }
@@ -350,6 +372,9 @@ static void ble_stack_init(void)
 
     // Register a handler for BLE events.
     NRF_SDH_BLE_OBSERVER(m_ble_observer, APP_BLE_OBSERVER_PRIO, ble_evt_handler, NULL);
+
+    // Register EMG service observer to handle HVN_TX_COMPLETE events
+    NRF_SDH_BLE_OBSERVER(m_emg_service_observer, APP_BLE_OBSERVER_PRIO, ble_emg_service_on_ble_evt, &m_emg_service);
 }
 
 
@@ -606,44 +631,57 @@ void check_ads112c04(void) {
 int main(void) {
     // Initialize.
     log_init();
+    NRF_LOG_INFO("========================================");
+    NRF_LOG_INFO("EMG BLE System Starting...");
+    NRF_LOG_INFO("========================================");
+
     led_init();
     timers_init();
     // power_management_init();
+
+    NRF_LOG_INFO("Initializing BLE stack...");
     ble_stack_init();
     gap_params_init();
     gatt_init();
     services_init();
     advertising_init();
     conn_params_init();
-    //// Start execution.
-    //NRF_LOG_INFO("Blinky example started.");
     advertising_start();
-    
+    NRF_LOG_INFO("BLE initialization complete");
+
+    NRF_LOG_INFO("Initializing hardware peripherals...");
     micros_timer_init();
     led_init();
     gpio_init();
     uart_init();
     uart_print_async("\r\nSystem Booting...\r\n");
-    
+
     twi_init();
     uart_print_async("TWI initialized.\r\n");
+    NRF_LOG_INFO("TWI/I2C initialized");
 
-    i2c_scan(); 
+    i2c_scan();
     check_ads112c04();
-    
+
     uart_print_async("Initializing ADS112C04...\r\n");
+    NRF_LOG_INFO("Configuring ADS112C04 ADC...");
     if (!ads112c04_init(&m_twi)) {
         uart_print_async("Failed to reset ADS112C04.\r\n");
+        NRF_LOG_ERROR("ADS112C04 initialization FAILED!");
         while (1);
     }
     uart_print_async("ADS112C04 reset successful.\r\n");
+    NRF_LOG_INFO("ADS112C04 configured successfully");
 
     uart_print_async("Configuring ADS112C04 raw mode...\r\n");
     if (!ads112c04_configure_raw_mode(&m_twi)) {
         uart_print_async("Failed to configure ADS112C04.\r\n");
+        NRF_LOG_ERROR("ADS112C04 raw mode configuration FAILED!");
         while (1);
     }
     uart_print_async("ADS112C04 configured.\r\n");
+    NRF_LOG_INFO("ADS112C04 in raw mode - ready for sampling");
+
     // Configura resistência do DS3502
     //if (ds3502_set_resistance(&m_twi, RESISTANCE_SETTING)) {
     //    uart_print_async("DS3502 resistance set successfully.\r\n");
@@ -654,30 +692,80 @@ int main(void) {
     const uint32_t blinkInterval = 1000;
     int16_t raw_data = 0;
     int16_t out_sample = 0;
+
+    // Buffer de pacotes para transmissão BLE otimizada
+    static int16_t ble_packet_buffer[EMG_PACKET_SIZE];
+    uint8_t packet_index = 0;
+
+    NRF_LOG_INFO("========================================");
+    NRF_LOG_INFO("System ready - entering main loop");
+    NRF_LOG_INFO("Sampling rate: 2000 Hz");
+    NRF_LOG_INFO("Packet size: %d samples", EMG_PACKET_SIZE);
+    NRF_LOG_INFO("========================================");
+
     //Loop principal while
     while (1)
     {
 
-        //if (gain_level >= 1 && gain_level <= 10) 
+        //if (gain_level >= 1 && gain_level <= 10)
         //{
         //// Mapeia de 1–10 para valor de resistência
         //uint8_t wiper_value = (gain_level - 1) * 0x0D; // exemplo linear
         //ds3502_set_resistance(&m_twi, wiper_value);
         //}
 
-        if (ads112c04_read_data(&m_twi, &raw_data)) 
+        if (ads112c04_read_data(&m_twi, &raw_data))
         {
             float filtered = butterworth_filter((float)raw_data);
-            fifo_push((int16_t)(filtered)); // opcional: converte para mV se quiser
+            fifo_push((int16_t)(filtered));
+
+            // Log periódico das leituras ADC (a cada 1000 amostras = 0.5 seg)
+            static uint32_t adc_sample_count = 0;
+            if (adc_sample_count % 1000 == 0) {
+                NRF_LOG_INFO("ADC: raw=%d, filtered=%d", raw_data, (int16_t)filtered);
+            }
+            adc_sample_count++;
         }
 
         if (fifo_pop(&out_sample)) {
             char buf[32];
             snprintf(buf, sizeof(buf), "%d\r\n", out_sample);
             uart_print_async(buf);
-            // === Enviar via BLE ===
+
+            // === Enviar via BLE em pacotes ===
             if (m_conn_handle != BLE_CONN_HANDLE_INVALID) {
-                ble_emg_service_notify(&m_emg_service, m_emg_service.conn_handle, (uint16_t)out_sample);
+                // Acumula amostras no buffer
+                ble_packet_buffer[packet_index++] = out_sample;
+
+                // Quando buffer está cheio, envia pacote
+                if (packet_index >= EMG_PACKET_SIZE) {
+                    uint32_t err_code = ble_emg_service_notify_packet(&m_emg_service,
+                                                                       m_emg_service.conn_handle,
+                                                                       ble_packet_buffer,
+                                                                       EMG_PACKET_SIZE);
+
+                    // Log de estatísticas de transmissão (a cada 50 pacotes = 1 segundo)
+                    static uint32_t packet_count = 0;
+                    static uint32_t packet_errors = 0;
+
+                    if (err_code != NRF_SUCCESS && err_code != NRF_ERROR_BUSY) {
+                        packet_errors++;
+                    }
+
+                    if (packet_count % 50 == 0) {
+                        NRF_LOG_INFO("BLE packets: sent=%d, errors=%d, last_err=0x%x, tx_busy=%d",
+                                     packet_count, packet_errors, err_code, m_emg_service.tx_in_progress);
+                    }
+                    packet_count++;
+
+                    // Se enviou com sucesso ou está ocupado, reseta o índice
+                    if (err_code == NRF_SUCCESS || err_code == NRF_ERROR_BUSY) {
+                        packet_index = 0;
+                    }
+                }
+            } else {
+                // Se desconectado, reseta o buffer
+                packet_index = 0;
             }
         }
 
@@ -686,5 +774,8 @@ int main(void) {
             lastBlinkTime = currentMillis;
             nrf_gpio_pin_toggle(LED_PIN);
         }
+
+        // CRÍTICO: Processa os logs RTT
+        NRF_LOG_PROCESS();
     }
 }
