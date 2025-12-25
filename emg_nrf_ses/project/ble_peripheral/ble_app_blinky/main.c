@@ -723,11 +723,13 @@ int main(void) {
     NRF_LOG_INFO("ADS112C04 in raw mode - ready for sampling");
 
     // Configura resistência do DS3502
-    //if (ds3502_set_resistance(&m_twi, RESISTANCE_SETTING)) {
-    //    uart_print_async("DS3502 resistance set successfully.\r\n");
-    //} else {
-    //    uart_print_async("Failed to set DS3502 resistance.\r\n");
-    //}
+    if (ds3502_set_resistance(&m_twi, RESISTANCE_SETTING)) {
+        uart_print_async("DS3502 resistance set successfully.\r\n");
+        NRF_LOG_INFO("DS3502 initialized with resistance setting: 0x%02X", RESISTANCE_SETTING);
+    } else {
+        uart_print_async("Failed to set DS3502 resistance.\r\n");
+        NRF_LOG_WARNING("DS3502 initialization failed");
+    }
     uint32_t lastBlinkTime = 0;
     const uint32_t blinkInterval = 1000;
     int16_t raw_data = 0;
@@ -747,12 +749,19 @@ int main(void) {
     while (1)
     {
 
-        //if (gain_level >= 1 && gain_level <= 10)
-        //{
-        //// Mapeia de 1–10 para valor de resistência
-        //uint8_t wiper_value = (gain_level - 1) * 0x0D; // exemplo linear
-        //ds3502_set_resistance(&m_twi, wiper_value);
-        //}
+        // Atualiza resistência do DS3502 se gain_level mudou
+        static uint8_t last_gain_level = 0xFF; // Valor inicial inválido para forçar primeira atualização
+        if (gain_level != last_gain_level && gain_level >= 1 && gain_level <= 10)
+        {
+            // Mapeia de 1–10 para valor de resistência
+            uint8_t wiper_value = (gain_level - 1) * 0x0D; // Mapeamento linear
+            if (ds3502_set_resistance(&m_twi, wiper_value)) {
+                last_gain_level = gain_level;
+                NRF_LOG_INFO("Gain level changed to %d (wiper: 0x%02X)", gain_level, wiper_value);
+            } else {
+                NRF_LOG_WARNING("Failed to update DS3502 gain to level %d", gain_level);
+            }
+        }
 
         if (ads112c04_read_data(&m_twi, &raw_data))
         {
