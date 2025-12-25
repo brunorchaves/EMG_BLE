@@ -44,8 +44,10 @@
 #define APP_ADV_INTERVAL                64
 #define APP_ADV_DURATION                BLE_GAP_ADV_TIMEOUT_GENERAL_UNLIMITED
 
-#define MIN_CONN_INTERVAL               MSEC_TO_UNITS(100, UNIT_1_25_MS)
-#define MAX_CONN_INTERVAL               MSEC_TO_UNITS(200, UNIT_1_25_MS)
+// Otimizado para streaming de alta performance (Delsys/FreeEMG level)
+// 7.5ms interval = ~133 conexões/segundo para transmissão em tempo real
+#define MIN_CONN_INTERVAL               MSEC_TO_UNITS(7.5, UNIT_1_25_MS)   // 7.5ms = 6 units
+#define MAX_CONN_INTERVAL               MSEC_TO_UNITS(15, UNIT_1_25_MS)    // 15ms = 12 units
 #define SLAVE_LATENCY                   0
 #define CONN_SUP_TIMEOUT                MSEC_TO_UNITS(4000, UNIT_10_MS)
 
@@ -120,12 +122,31 @@ static void gap_params_init(void)
     NRF_LOG_INFO("GAP parameters configured successfully");
 }
 
+// Handler para eventos GATT (MTU exchange)
+static void gatt_evt_handler(nrf_ble_gatt_t * p_gatt, nrf_ble_gatt_evt_t const * p_evt)
+{
+    if (p_evt->evt_id == NRF_BLE_GATT_EVT_ATT_MTU_UPDATED) {
+        uint16_t att_mtu = p_evt->params.att_mtu_effective;
+        NRF_LOG_INFO("ATT MTU negotiated: %d bytes (payload: %d bytes)",
+                     att_mtu, att_mtu - 3);
+
+        // MTU efetivo para notificações = ATT_MTU - 3 bytes (header)
+        // Com MTU 247 = 244 bytes úteis = 122 amostras int16
+        m_emg_service.conn_handle = p_evt->conn_handle;
+    }
+}
+
 static void gatt_init(void)
 {
-    NRF_LOG_INFO("Initializing GATT...");
-    ret_code_t err_code = nrf_ble_gatt_init(&m_gatt, NULL);
+    NRF_LOG_INFO("Initializing GATT with MTU 247...");
+    ret_code_t err_code = nrf_ble_gatt_init(&m_gatt, gatt_evt_handler);
     APP_ERROR_CHECK(err_code);
-    NRF_LOG_INFO("GATT initialized successfully");
+
+    // Define MTU preferido (será negociado com o client)
+    err_code = nrf_ble_gatt_att_mtu_periph_set(&m_gatt, NRF_SDH_BLE_GATT_MAX_MTU_SIZE);
+    APP_ERROR_CHECK(err_code);
+
+    NRF_LOG_INFO("GATT initialized: max_mtu=%d", NRF_SDH_BLE_GATT_MAX_MTU_SIZE);
 }
 
 static void advertising_init(void)
@@ -276,7 +297,18 @@ static void ble_evt_handler(ble_evt_t const * p_ble_evt, void * p_context)
             m_emg_service.conn_handle = m_conn_handle;
             NRF_LOG_INFO("EMG service connection handle assigned");
 
-            APP_ERROR_CHECK(err_code);
+            // Request BLE 2M PHY for 2x throughput
+            ble_gap_phys_t const phys = {
+                .rx_phys = BLE_GAP_PHY_2MBPS,
+                .tx_phys = BLE_GAP_PHY_2MBPS,
+            };
+            err_code = sd_ble_gap_phy_update(m_conn_handle, &phys);
+            if (err_code == NRF_SUCCESS) {
+                NRF_LOG_INFO("Requesting BLE 2M PHY...");
+            } else {
+                NRF_LOG_WARNING("PHY update request failed: 0x%x", err_code);
+            }
+
             break;
 
         case BLE_GAP_EVT_DISCONNECTED:
@@ -302,15 +334,23 @@ static void ble_evt_handler(ble_evt_t const * p_ble_evt, void * p_context)
 
         case BLE_GAP_EVT_PHY_UPDATE_REQUEST:
         {
-            NRF_LOG_INFO("PHY update request received");
+            NRF_LOG_INFO("PHY update request received from peer");
+            // Accept 2M PHY for maximum throughput
             ble_gap_phys_t const phys =
             {
-                .rx_phys = BLE_GAP_PHY_AUTO,
-                .tx_phys = BLE_GAP_PHY_AUTO,
+                .rx_phys = BLE_GAP_PHY_2MBPS,
+                .tx_phys = BLE_GAP_PHY_2MBPS,
             };
             err_code = sd_ble_gap_phy_update(p_ble_evt->evt.gap_evt.conn_handle, &phys);
             APP_ERROR_CHECK(err_code);
-            NRF_LOG_INFO("PHY update completed");
+        } break;
+
+        case BLE_GAP_EVT_PHY_UPDATE:
+        {
+            ble_gap_evt_phy_update_t const * p_phy = &p_ble_evt->evt.gap_evt.params.phy_update;
+            NRF_LOG_INFO("PHY updated: TX=%s, RX=%s",
+                         (p_phy->tx_phy == BLE_GAP_PHY_2MBPS) ? "2M" : "1M",
+                         (p_phy->rx_phy == BLE_GAP_PHY_2MBPS) ? "2M" : "1M");
         } break;
 
         case BLE_GATTS_EVT_SYS_ATTR_MISSING:

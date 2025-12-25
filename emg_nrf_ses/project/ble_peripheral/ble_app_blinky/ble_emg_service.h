@@ -12,10 +12,14 @@
 #define EMG_CHAR_UUID                 0x0002
 #define EMG_GAIN_CHAR_UUID            0x0003
 
-// Configuração de pacotes otimizados para MTU padrão (8 amostras x 2 bytes = 16 bytes)
-// MTU padrão BLE = 23 bytes (20 bytes payload - 3 bytes header = 17 bytes úteis)
-#define EMG_PACKET_SIZE               8       // Número de amostras por pacote
-#define EMG_MAX_PAYLOAD               (EMG_PACKET_SIZE * sizeof(int16_t))  // 16 bytes
+// Configuração de pacotes otimizados para MTU 247 (alta performance)
+// MTU 247 = 244 bytes úteis (247 - 3 bytes header)
+// 60 amostras x 2 bytes = 120 bytes (50% do MTU, permite buffering eficiente)
+// Com ADS a 2kHz e connection interval de 7.5-15ms:
+//   - 15ms @ 2kHz = 30 amostras → 2 buffers de 60 amostras = 30ms latência
+//   - Throughput: ~133 pacotes/s x 60 amostras = 7980 Hz capacity (4x headroom)
+#define EMG_PACKET_SIZE               60      // Número de amostras por pacote
+#define EMG_MAX_PAYLOAD               (EMG_PACKET_SIZE * sizeof(int16_t))  // 120 bytes
 
 typedef struct {
     uint16_t                    service_handle;
