@@ -1,5 +1,15 @@
-# Ignore build folder inside gatta_client
+# Pastas de build ESP-IDF / SDK genérico
 esp_dongle_ble/build/
 emg_nrf_sdk/emg_ble/build
-blinky/
 emg_nrf_sdk/build
+blinky/
+
+# SES (Segger Embedded Studio) — arquivos gerados pelo compilador
+**/ses/Output/
+
+# Arquivos temporários de editor e SO
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+*~

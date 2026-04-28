@@ -11,7 +11,6 @@
 #include "nrfx_uart.h"
 #include "nrfx_twi.h"
 #include "nrf_gpio.h"
-#include "nrfx_timer.h"
 #include "ADS112C04.h"
 
 #include "nrf_sdh.h"
@@ -41,15 +40,15 @@
 #define DEVICE_NAME                     "EMG_BLE"
 #define APP_BLE_OBSERVER_PRIO           3
 #define APP_BLE_CONN_CFG_TAG            1
-#define APP_ADV_INTERVAL                64
+#define APP_ADV_INTERVAL                320   // 200ms — reduz wake-ups de rádio durante discovery
 #define APP_ADV_DURATION                BLE_GAP_ADV_TIMEOUT_GENERAL_UNLIMITED
 
-// Otimizado para streaming de alta performance (Delsys/FreeEMG level)
-// 7.5ms interval = ~133 conexões/segundo para transmissão em tempo real
-#define MIN_CONN_INTERVAL               MSEC_TO_UNITS(7.5, UNIT_1_25_MS)   // 7.5ms = 6 units
-#define MAX_CONN_INTERVAL               MSEC_TO_UNITS(15, UNIT_1_25_MS)    // 15ms = 12 units
+// Otimizado para baixo consumo: pacote de 60 amostras leva 60ms para encher ao ADC 1kSPS,
+// então 75-100ms de intervalo é suficiente sem desperdício de rádio
+#define MIN_CONN_INTERVAL               MSEC_TO_UNITS(75, UNIT_1_25_MS)    // 75ms = 60 units
+#define MAX_CONN_INTERVAL               MSEC_TO_UNITS(100, UNIT_1_25_MS)   // 100ms = 80 units
 #define SLAVE_LATENCY                   0
-#define CONN_SUP_TIMEOUT                MSEC_TO_UNITS(4000, UNIT_10_MS)
+#define CONN_SUP_TIMEOUT                MSEC_TO_UNITS(6000, UNIT_10_MS)
 
 #define FIRST_CONN_PARAMS_UPDATE_DELAY  (20000 / 0.32768) // Substituindo APP_TIMER_TICKS
 #define NEXT_CONN_PARAMS_UPDATE_DELAY   (5000 / 0.32768)
@@ -57,8 +56,21 @@
 
 #define DEAD_BEEF                       0xDEADBEEF
 
+// === Hardware Configuration ===
+#define LED_PIN           (32 + 13)
+#define RST_PIN           28
+#define UART_TX_PIN       (32 + 11)
+#define UART_RX_PIN       (32 + 12)
+#define I2C_SDA_PIN       4
+#define I2C_SCL_PIN       5
+#define I2C_INSTANCE_ID   0
+
+#define FIFO_SIZE         64
+#define UART_BUFFER_SIZE  16
+
 NRF_BLE_GATT_DEF(m_gatt);
 NRF_BLE_QWR_DEF(m_qwr);
+APP_TIMER_DEF(m_led_timer_id);
 
 ble_emg_service_t m_emg_service; // Instância do serviço EMG manualmente declarada
 
@@ -87,11 +99,18 @@ void assert_nrf_callback(uint16_t line_num, const uint8_t * p_file_name)
     app_error_handler(DEAD_BEEF, line_num, p_file_name);
 }
 
+static void led_blink_handler(void * p_context)
+{
+    nrf_gpio_pin_toggle(LED_PIN);
+}
+
 static void timers_init(void)
 {
     NRF_LOG_INFO("Initializing timers...");
-    // Initialize timer module, making it use the scheduler
     ret_code_t err_code = app_timer_init();
+    APP_ERROR_CHECK(err_code);
+
+    err_code = app_timer_create(&m_led_timer_id, APP_TIMER_MODE_REPEATED, led_blink_handler);
     APP_ERROR_CHECK(err_code);
     NRF_LOG_INFO("Timers initialized successfully");
 }
@@ -297,17 +316,8 @@ static void ble_evt_handler(ble_evt_t const * p_ble_evt, void * p_context)
             m_emg_service.conn_handle = m_conn_handle;
             NRF_LOG_INFO("EMG service connection handle assigned");
 
-            // Request BLE 2M PHY for 2x throughput
-            ble_gap_phys_t const phys = {
-                .rx_phys = BLE_GAP_PHY_2MBPS,
-                .tx_phys = BLE_GAP_PHY_2MBPS,
-            };
-            err_code = sd_ble_gap_phy_update(m_conn_handle, &phys);
-            if (err_code == NRF_SUCCESS) {
-                NRF_LOG_INFO("Requesting BLE 2M PHY...");
-            } else {
-                NRF_LOG_WARNING("PHY update request failed: 0x%x", err_code);
-            }
+            // Mantém 1M PHY — menor consumo; throughput de 120 bytes/100ms é suficiente
+            NRF_LOG_INFO("Connected on 1M PHY (power-saving mode)");
 
             break;
 
@@ -334,23 +344,14 @@ static void ble_evt_handler(ble_evt_t const * p_ble_evt, void * p_context)
 
         case BLE_GAP_EVT_PHY_UPDATE_REQUEST:
         {
-            NRF_LOG_INFO("PHY update request received from peer");
-            // Accept 2M PHY for maximum throughput
+            // Aceita somente 1M PHY para menor consumo
             ble_gap_phys_t const phys =
             {
-                .rx_phys = BLE_GAP_PHY_2MBPS,
-                .tx_phys = BLE_GAP_PHY_2MBPS,
+                .rx_phys = BLE_GAP_PHY_1MBPS,
+                .tx_phys = BLE_GAP_PHY_1MBPS,
             };
             err_code = sd_ble_gap_phy_update(p_ble_evt->evt.gap_evt.conn_handle, &phys);
             APP_ERROR_CHECK(err_code);
-        } break;
-
-        case BLE_GAP_EVT_PHY_UPDATE:
-        {
-            ble_gap_evt_phy_update_t const * p_phy = &p_ble_evt->evt.gap_evt.params.phy_update;
-            NRF_LOG_INFO("PHY updated: TX=%s, RX=%s",
-                         (p_phy->tx_phy == BLE_GAP_PHY_2MBPS) ? "2M" : "1M",
-                         (p_phy->rx_phy == BLE_GAP_PHY_2MBPS) ? "2M" : "1M");
         } break;
 
         case BLE_GATTS_EVT_SYS_ATTR_MISSING:
@@ -507,40 +508,6 @@ int16_t remove_offset(int16_t raw) {
 }
 
 
-// === Hardware Configuration ===
-#define LED_PIN           (32 + 13)
-#define RST_PIN           28
-#define UART_TX_PIN       (32 + 11)
-#define UART_RX_PIN       (32 + 12)
-#define I2C_SDA_PIN       4
-#define I2C_SCL_PIN       5
-#define I2C_INSTANCE_ID   0
-
-#define FIFO_SIZE         64
-#define UART_BUFFER_SIZE  16
-
-// === Timer Setup ===
-static const nrfx_timer_t micros_timer = NRFX_TIMER_INSTANCE(2);
-void dummy_timer_handler(nrf_timer_event_t event_type, void *p_context) {}
-
-void micros_timer_init(void) {
-    nrfx_timer_config_t config = NRFX_TIMER_DEFAULT_CONFIG;
-    config.frequency = NRF_TIMER_FREQ_1MHz;
-    config.mode = NRF_TIMER_MODE_TIMER;
-    config.bit_width = NRF_TIMER_BIT_WIDTH_32;
-    config.interrupt_priority = NRFX_TIMER_DEFAULT_CONFIG_IRQ_PRIORITY;
-    nrfx_timer_init(&micros_timer, &config, dummy_timer_handler);
-    nrfx_timer_enable(&micros_timer);
-}
-
-uint32_t getMicros(void) {
-    return nrfx_timer_capture(&micros_timer, NRF_TIMER_CC_CHANNEL0);
-}
-
-uint32_t getMillis(void) {
-    return getMicros() / 1000;
-}
-
 // === UART Setup ===
 static const nrfx_uart_t m_uart = NRFX_UART_INSTANCE(0);
 static volatile bool m_tx_busy = false;
@@ -677,7 +644,7 @@ int main(void) {
 
     led_init();
     timers_init();
-    // power_management_init();
+    power_management_init();
 
     NRF_LOG_INFO("Initializing BLE stack...");
     ble_stack_init();
@@ -690,7 +657,6 @@ int main(void) {
     NRF_LOG_INFO("BLE initialization complete");
 
     NRF_LOG_INFO("Initializing hardware peripherals...");
-    micros_timer_init();
     led_init();
     gpio_init();
     uart_init();
@@ -700,8 +666,7 @@ int main(void) {
     uart_print_async("TWI initialized.\r\n");
     NRF_LOG_INFO("TWI/I2C initialized");
 
-    i2c_scan();
-    check_ads112c04();
+    // i2c_scan() e check_ads112c04() removidos do loop de produção
 
     uart_print_async("Initializing ADS112C04...\r\n");
     NRF_LOG_INFO("Configuring ADS112C04 ADC...");
@@ -730,8 +695,6 @@ int main(void) {
         uart_print_async("Failed to set DS3502 resistance.\r\n");
         NRF_LOG_WARNING("DS3502 initialization failed");
     }
-    uint32_t lastBlinkTime = 0;
-    const uint32_t blinkInterval = 1000;
     int16_t raw_data = 0;
     int16_t out_sample = 0;
 
@@ -739,27 +702,25 @@ int main(void) {
     static int16_t ble_packet_buffer[EMG_PACKET_SIZE];
     uint8_t packet_index = 0;
 
+    // Inicia LED blink via app_timer (usa LFCLK, sem manter HFCLK ativo)
+    ret_code_t err_code_led = app_timer_start(m_led_timer_id, APP_TIMER_TICKS(1000), NULL);
+    APP_ERROR_CHECK(err_code_led);
+
     NRF_LOG_INFO("========================================");
-    NRF_LOG_INFO("System ready - entering main loop");
-    NRF_LOG_INFO("Sampling rate: 2000 Hz");
-    NRF_LOG_INFO("Packet size: %d samples", EMG_PACKET_SIZE);
+    NRF_LOG_INFO("System ready - low-power mode");
+    NRF_LOG_INFO("Sampling rate: 1000 SPS | Packet: %d samples | BLE interval: 75-100ms", EMG_PACKET_SIZE);
     NRF_LOG_INFO("========================================");
 
-    //Loop principal while
     while (1)
     {
-
         // Atualiza resistência do DS3502 se gain_level mudou
-        static uint8_t last_gain_level = 0xFF; // Valor inicial inválido para forçar primeira atualização
+        static uint8_t last_gain_level = 0xFF;
         if (gain_level != last_gain_level && gain_level >= 1 && gain_level <= 10)
         {
-            // Mapeia de 1–10 para valor de resistência
-            uint8_t wiper_value = (gain_level - 1) * 0x0D; // Mapeamento linear
+            uint8_t wiper_value = (gain_level - 1) * 0x0D;
             if (ds3502_set_resistance(&m_twi, wiper_value)) {
                 last_gain_level = gain_level;
                 NRF_LOG_INFO("Gain level changed to %d (wiper: 0x%02X)", gain_level, wiper_value);
-            } else {
-                NRF_LOG_WARNING("Failed to update DS3502 gain to level %d", gain_level);
             }
         }
 
@@ -767,64 +728,46 @@ int main(void) {
         {
             float filtered = butterworth_filter((float)raw_data);
             fifo_push((int16_t)(filtered));
-
-            // Log periódico das leituras ADC (a cada 1000 amostras = 0.5 seg)
-            static uint32_t adc_sample_count = 0;
-            if (adc_sample_count % 1000 == 0) {
-                NRF_LOG_INFO("ADC: raw=%d, filtered=%d", raw_data, (int16_t)filtered);
-            }
-            adc_sample_count++;
         }
 
         if (fifo_pop(&out_sample)) {
-            char buf[32];
-            snprintf(buf, sizeof(buf), "%d\r\n", out_sample);
-            uart_print_async(buf);
+            // Rate-limit UART: imprime 1 em cada 100 amostras (~10 Hz) para poupar energia
+            static uint32_t uart_sample_count = 0;
+            if (uart_sample_count++ % 100 == 0) {
+                char buf[32];
+                snprintf(buf, sizeof(buf), "%d\r\n", out_sample);
+                uart_print_async(buf);
+            }
 
-            // === Enviar via BLE em pacotes ===
             if (m_conn_handle != BLE_CONN_HANDLE_INVALID) {
-                // Acumula amostras no buffer
                 ble_packet_buffer[packet_index++] = out_sample;
 
-                // Quando buffer está cheio, envia pacote
                 if (packet_index >= EMG_PACKET_SIZE) {
-                    uint32_t err_code = ble_emg_service_notify_packet(&m_emg_service,
-                                                                       m_emg_service.conn_handle,
-                                                                       ble_packet_buffer,
-                                                                       EMG_PACKET_SIZE);
-
-                    // Log de estatísticas de transmissão (a cada 50 pacotes = 1 segundo)
                     static uint32_t packet_count = 0;
                     static uint32_t packet_errors = 0;
 
-                    if (err_code != NRF_SUCCESS && err_code != NRF_ERROR_BUSY) {
+                    uint32_t ble_err = ble_emg_service_notify_packet(&m_emg_service,
+                                                                      m_emg_service.conn_handle,
+                                                                      ble_packet_buffer,
+                                                                      EMG_PACKET_SIZE);
+
+                    if (ble_err != NRF_SUCCESS && ble_err != NRF_ERROR_BUSY) {
                         packet_errors++;
                     }
-
-                    if (packet_count % 50 == 0) {
-                        NRF_LOG_INFO("BLE packets: sent=%d, errors=%d, last_err=0x%x, tx_busy=%d",
-                                     packet_count, packet_errors, err_code, m_emg_service.tx_in_progress);
+                    if (packet_count++ % 100 == 0) {
+                        NRF_LOG_INFO("BLE: sent=%d errors=%d", packet_count, packet_errors);
                     }
-                    packet_count++;
 
-                    // Se enviou com sucesso ou está ocupado, reseta o índice
-                    if (err_code == NRF_SUCCESS || err_code == NRF_ERROR_BUSY) {
+                    if (ble_err == NRF_SUCCESS || ble_err == NRF_ERROR_BUSY) {
                         packet_index = 0;
                     }
                 }
             } else {
-                // Se desconectado, reseta o buffer
                 packet_index = 0;
             }
         }
 
-        uint32_t currentMillis = getMillis();
-        if (currentMillis - lastBlinkTime >= blinkInterval) {
-            lastBlinkTime = currentMillis;
-            nrf_gpio_pin_toggle(LED_PIN);
-        }
-
-        // CRÍTICO: Processa os logs RTT
-        NRF_LOG_PROCESS();
+        // Dorme até próximo evento (BLE, timer, I2C) — principal ganho de energia
+        idle_state_handle();
     }
 }
