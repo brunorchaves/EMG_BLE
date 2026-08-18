@@ -2,6 +2,201 @@
 
 Firmware profissional para aquisição e transmissão de sinais EMG via Bluetooth Low Energy (BLE) usando nRF52840, ADS112C04 e DS3502.
 
+Este é o firmware do sensor sEMG vestível de baixo consumo apresentado no artigo
+**"A Low-Power Bluetooth LE Surface EMG Sensor"** (UFMG) — 45 mW transmitindo a 2 kS/s,
+~30% abaixo de sistemas comparáveis. Detalhes em [Publicação Científica](#-publicação-científica).
+
+## 📄 Publicação Científica
+
+Este repositório contém o firmware do sensor descrito no artigo:
+
+> **A Low-Power Bluetooth LE Surface EMG Sensor**
+> Robert Ribeiro Gomes, **Bruno Ribeiro Chaves**, Renan Fernandes Kozan, Dalton Martini Colombo
+> Universidade Federal de Minas Gerais (UFMG), Belo Horizonte, Brasil
+> 📎 [Artigo completo (PDF)](663744.pdf)
+
+**ORCID dos autores**
+
+| Autor | ORCID | Vínculo |
+|---|---|---|
+| Robert Ribeiro Gomes | 0000-0003-3831-2264 | Graduate Program in Electrical Engineering |
+| Bruno Ribeiro Chaves | 0009-0000-4130-3209 | Undergraduate Program in Electrical Engineering |
+| Renan Fernandes Kozan | 0000-0002-1056-0904 | Graduate Program in Electrical Engineering |
+| Dalton Martini Colombo | 0000-0002-6781-9673 | Graduate Program in Electrical Engineering |
+
+### Resumo
+
+Apresentamos um sistema de eletromiografia de superfície (sEMG) de baixo consumo baseado em
+Bluetooth Low Energy (BLE), projetado para monitoramento muscular vestível. O dispositivo integra
+uma cadeia de aquisição totalmente customizada — filtragem analógica, condicionamento de sinal,
+reprodução de formas de onda a partir de um dataset e transmissão sem fio via BLE — centrada em um
+ADC ΔΣ de 16 bits e um SoC Nordic nRF52840. Para avaliar o desempenho, um movimento representativo
+de *sidekicking* (chute lateral) de um dataset público de sEMG foi fisicamente reproduzido e gravado
+simultaneamente pelo dispositivo proposto e por um sistema EMG de grau clínico. As análises nos
+domínios do tempo e da frequência mostram que o sistema preserva as características principais dos
+sinais mioelétricos na banda de 30–400 Hz. Os resultados sustentam sua adequação para aplicações em
+ciências do esporte, reabilitação e interação humano–máquina.
+
+**Palavras-chave:** Wearable EMG, low-power, Bluetooth Low Energy, signal-to-noise ratio, sports monitoring.
+
+### Arquitetura do sensor (artigo)
+
+A cadeia de aquisição descrita no artigo é dividida em sete blocos: pré-amplificação, filtro
+passa-alta (HPF), filtro passa-baixa (LPF), amplificador de ganho ajustável, conversão A/D, circuito
+de tensão de referência e microcontrolador.
+
+| Bloco | Componente | Detalhes |
+|---|---|---|
+| Eletrodos | Ag/AgCl com gel condutivo | 3 eletrodos (2 diferenciais + referência), espaçamento de 25 mm |
+| Amplificador de instrumentação | **INA317** | 50 µA, offset de 75 µV, CMRR de 110 dB, ganho fixo de 35× |
+| Proteção de entrada | R1 (sobrecorrente), R2/C2/C3 (EMI/ESD), diodos BAT54S (sub/sobretensão) | — |
+| Filtro passa-banda | Sallen-Key de 2ª ordem (Butterworth) | HPF 20 Hz (medido 30 Hz), LPF 482 Hz (medido 400 Hz), ganho 1,55 por estágio |
+| Ganho ajustável | **DS3502** (potenciômetro digital de 7 bits, I²C) | 10 kΩ máx., ganho de 2× a 11× |
+| ADC | **ADS112C04** | 16 bits, ΔΣ, I²C, 4 canais diferenciais, até 2 kS/s, ~315 µA, PGA 1×–128× |
+| Level shifter | **MAX6106** (ref. 2,048 V) + **MCP609** | Topologia inversora, desloca o sinal para a faixa 0–5 V |
+| MCU / rádio | **nRF52840** | Cortex-M4F 64 MHz, 1 MB flash, 256 kB RAM, Bluetooth 5.4 (LE, Long Range) |
+
+Alimentação: bateria Li-Ion de célula única 400 mAh @ 3,7 V, com conversor step-up de alta eficiência
+e regulador de baixo ruído gerando os trilhos do front-end analógico e do microcontrolador.
+
+**Tabela 1 — Características do sensor sEMG proposto**
+
+| Descrição | Valor |
+|---|---|
+| Número de canais | 1 |
+| Frequência de amostragem (*f*<sub>s</sub>) | 2 kS/s |
+| Resolução A/D (α) | 16 bits |
+| Banda passante (*BW*) | 30 Hz – 400 Hz |
+| Ganho ajustável (*G*) | 1× – 11× |
+| Comunicação | BLE 5.1 |
+| Receptor | Computador / smartphone |
+| Alimentação (*V*<sub>cc</sub>) | 5 V |
+| Bateria | Li-Ion 400 mAh @ 3,7 V |
+| Dimensões | 55 mm × 30 mm |
+| Material dos eletrodos | Ag/AgCl |
+
+Na configuração caracterizada no artigo, o firmware agrega dados de 1 kS/s em notificações BLE de
+20 Hz, reduzindo significativamente o tempo de rádio no ar sem sacrificar resolução.
+
+### Protocolo de validação
+
+O dataset utilizado é o *EMG Physical Action Data Set* (UCI Machine Learning Repository, 2011):
+4 voluntários (3 homens e 1 mulher, 20–30 anos), 20 sessões cada, com 10 ações normais e 10
+agressivas. Os sinais foram adquiridos com sistema Delsys de 8 eletrodos de superfície em braços
+(bíceps/tríceps) e pernas (quadríceps/isquiotibiais), na Essex Robotic Arena (4 × 5,5 m), com saco
+de pancadas de 1,75 m — ~10.000 amostras por canal em cada sessão.
+
+Um movimento de *sidekicking* foi **fisicamente reproduzido** e gravado simultaneamente pelo
+protótipo e por um sistema EMG clínico. Pipeline de processamento unificado para ambos os registros:
+
+1. Normalização para [-1, 1]
+2. Detecção de envelope por RMS em janelas deslizantes de 50 ms
+3. Segmentos ativos identificados quando o envelope excede 20% do pico do sinal
+4. Estimativa de ruído por RMS dos segmentos de repouso
+5. SNR calculada como:
+
+```
+SNR_dB = 20 · log10( RMS_signal / RMS_noise )
+```
+
+### Resultados
+
+**SNR (domínio do tempo)**
+
+| Sinal | SNR |
+|---|---|
+| Dataset original | 10,7 dB |
+| **Sistema proposto** | **9,0 dB** |
+| Sistema clínico | 12,7 dB |
+
+Os três sinais apresentam forte alinhamento temporal, com picos de ativação sincronizados, e as
+regiões de contração detectadas automaticamente foram similares em todos os casos. O sistema
+proposto exibe ruído de alta frequência ligeiramente maior, mas mantém picos bem definidos e
+consistência morfológica.
+
+**Resposta em frequência** — Ambos os sistemas apresentam ganho consistente na faixa fisiologicamente
+relevante. O sistema proposto exibe ganho geralmente mais alto (maior sensibilidade, com maior
+vulnerabilidade a ruído e saturação) e variações de fase mais abruptas em altas frequências
+(*group delay* não uniforme), enquanto o clínico apresenta deslocamento de fase mais linear e
+gradual — desejável para preservar a integridade temporal de eventos rápidos como o início da
+contração.
+
+**Tabela 2 — Corrente RMS e potência por estado de operação (5,0 V)**
+
+| Estado | Corrente (mA) | Potência (mW) |
+|---|---|---|
+| OFF (0 V) | 0 | 0 |
+| IDLE | 2,922 | 14,61 |
+| CONNECTED | 8,497 | 42,49 |
+| TRANSMITTING | 9,063 | 45,32 |
+
+Os quatro modos de operação são: **OFF** (sistema desligado), **IDLE** (eletrônica energizada, sem
+conexão com um central BLE), **CONNECTED** (pareado, mas a característica BLE não está sendo lida) e
+**TRANSMITTING** (característica lida ativamente, pacotes enviados periodicamente).
+
+**Tabela 3 — Comparação com outros sistemas de detecção sEMG**
+
+| Sistema | Canais | Resolução ADC (bits) | Transmissão | Banda (Hz) | Taxa (kS/s) |
+|---|---|---|---|---|---|
+| **Este trabalho** | 1 | 16 | BLE | 30 – 400 | 2,0 |
+| Imperatori et al., 2013 | 4 | 12 | BLE | 8,7 – 952 | 4,0 |
+| Tang et al., 2012 | 6 | 10 | RF | 20 – 500 | 1,0 |
+| Cerone et al., 2019 | 32 | 16 | Wi-Fi | 10 – 500 | 2,0 |
+| Ahamed et al., 2015 | 6 | 10 | Bluetooth | 0,03 – 564 | 1,2 |
+| Chen et al., 2017 | 8 | 12 | Cabeado | 20 – 450 | 1,0 |
+
+**Tabela 4 — Comparação de consumo entre arquiteturas de hardware sEMG**
+
+| Arquitetura | Consumo |
+|---|---|
+| **Este trabalho** | **45,32 mW** |
+| Dispositivo clínico (Delsys Trigno) | 65 mW |
+| Chen et al., 2020 | 62,7 mW |
+| Simić et al., 2024 | 67,65 mW |
+
+O nó transmite a 2 kS/s consumindo apenas 45 mW — cerca de **30% menos** que sistemas similares
+reportados na literatura.
+
+### Estratégias de baixo consumo no firmware
+
+- Todos os periféricos não utilizados são desabilitados quando o rádio está desconectado
+- Rotina de gerenciamento de energia da Nordic invocada durante os períodos de *idle*
+- Potência de transmissão BLE reduzida para **-20 dBm**
+- Intervalo de *advertising* estendido de 40 ms (padrão) para **500 ms**, reduzindo o *duty cycle* do rádio
+
+### Conclusão e trabalhos futuros
+
+O sistema captura sinais mioelétricos de forma confiável durante movimentos intensos, com resposta
+temporal bem alinhada ao sinal de referência e desempenho comparável a soluções estabelecidas em
+termos de resolução, banda e taxa de amostragem. Embora limitado a um único canal, entrega esse
+desempenho em um dispositivo compacto e de baixo consumo. Trabalhos futuros focam em **aquisição
+multicanal** e em **testes com voluntários humanos**, após aprovação de comitê de ética, para
+consolidar o sistema como solução robusta para uso além do ambiente clínico.
+
+### Financiamento
+
+Trabalho financiado em parte pela CAPES (Finance Code 001), pelo Instituto Serrapilheira
+(grant Serra-2211-42117) e pela FAPEMIG (APQ-05837-23).
+
+### Como citar
+
+```bibtex
+@inproceedings{gomes_lowpower_semg,
+  title       = {A Low-Power Bluetooth LE Surface EMG Sensor},
+  author      = {Gomes, Robert Ribeiro and Chaves, Bruno Ribeiro and
+                 Kozan, Renan Fernandes and Colombo, Dalton Martini},
+  institution = {Universidade Federal de Minas Gerais},
+  address     = {Belo Horizonte, Brazil}
+}
+```
+
+> **Nota:** o artigo descreve a configuração de referência caracterizada em laboratório
+> (banda analógica 30–400 Hz, notificações BLE agregadas em 20 Hz, -20 dBm). O firmware neste
+> repositório evoluiu para um modo de streaming de alta taxa (60 amostras/pacote, ~250 pacotes/s,
+> filtro digital 20–500 Hz). As seções abaixo documentam os parâmetros atuais do firmware.
+
+---
+
 ## 🎯 Características
 
 - **Aquisição de alta performance** - ADS112C04 @ 2000 Hz, 16-bit
@@ -305,10 +500,19 @@ await device.writeCharacteristicWithResponseForService(
 
 ## 📚 Referências
 
+### Artigo e esquemáticos
+- [A Low-Power Bluetooth LE Surface EMG Sensor](663744.pdf) - Artigo do projeto
+- [Esquemático EMG v2.0](Schematic_EMG-schematic-v2.0_2025-02-19.pdf) - Circuito do sensor
+
+### Datasheets e documentação
 - [nRF52840 Product Specification](https://infocenter.nordicsemi.com/pdf/nRF52840_PS_v1.8.pdf)
 - [ADS112C04 Datasheet](https://www.ti.com/lit/ds/symlink/ads112c04.pdf)
 - [DS3502 Datasheet](https://www.analog.com/media/en/technical-documentation/data-sheets/DS3502.pdf)
+- [INA317 Datasheet](https://www.ti.com/lit/ds/symlink/ina317.pdf)
 - [nRF5 SDK Documentation](https://infocenter.nordicsemi.com/topic/sdk_nrf5_v17.1.0/)
+
+### Dataset de validação
+- [EMG Physical Action Data Set](https://doi.org/10.24432/C53W49) - UCI Machine Learning Repository (Theodoridis, 2011)
 
 ## 🔗 Repositórios Relacionados
 
@@ -319,9 +523,16 @@ await device.writeCharacteristicWithResponseForService(
 
 MIT License - Veja [LICENSE](LICENSE) para detalhes
 
-## 👨‍💻 Autor
+## 👨‍💻 Autores
 
-Bruno Chaves - [GitHub](https://github.com/brunorchaves)
+**Firmware e desenvolvimento**
+- Bruno Chaves - [GitHub](https://github.com/brunorchaves)
+
+**Autores do artigo** (Universidade Federal de Minas Gerais)
+- Robert Ribeiro Gomes
+- Bruno Ribeiro Chaves
+- Renan Fernandes Kozan
+- Dalton Martini Colombo
 
 ---
 
