@@ -3,7 +3,7 @@
 Firmware profissional para aquisição e transmissão de sinais EMG via Bluetooth Low Energy (BLE) usando nRF52840, ADS112C04 e DS3502.
 
 Este é o firmware do sensor sEMG vestível de baixo consumo apresentado no artigo
-**"A Low-Power Bluetooth LE Surface EMG Sensor"** (UFMG) — 45 mW transmitindo a 2 kS/s,
+**"A Low-Power Bluetooth LE Surface EMG Sensor"** (LEB/UFMG, SEB 2025) — 45 mW transmitindo a 2 kS/s,
 ~30% abaixo de sistemas comparáveis. Detalhes em [Publicação Científica](#-publicação-científica).
 
 ## 📄 Publicação Científica
@@ -12,17 +12,21 @@ Este repositório contém o firmware do sensor descrito no artigo:
 
 > **A Low-Power Bluetooth LE Surface EMG Sensor**
 > Robert Ribeiro Gomes, **Bruno Ribeiro Chaves**, Renan Fernandes Kozan, Dalton Martini Colombo
-> Universidade Federal de Minas Gerais (UFMG), Belo Horizonte, Brasil
-> 📎 [Artigo completo (PDF)](663744.pdf)
+> Laboratório de Engenharia Biomédica (LEB), Universidade Federal de Minas Gerais (UFMG), Belo Horizonte, Brasil
+> **XVI Simpósio de Engenharia Biomédica (SEB 2025)** — Universidade Federal de Uberlândia (UFU)
+> Apresentação oral em 16/09/2025 · Anais com ISSN 2358-3568
+> 📎 [Artigo completo (PDF)](663744.pdf) · 🔗 [Site do evento](https://seb2025.sciencesconf.org/)
 
 **ORCID dos autores**
 
 | Autor | ORCID | Vínculo |
 |---|---|---|
-| Robert Ribeiro Gomes | 0000-0003-3831-2264 | Graduate Program in Electrical Engineering |
-| Bruno Ribeiro Chaves | 0009-0000-4130-3209 | Undergraduate Program in Electrical Engineering |
-| Renan Fernandes Kozan | 0000-0002-1056-0904 | Graduate Program in Electrical Engineering |
-| Dalton Martini Colombo | 0000-0002-6781-9673 | Graduate Program in Electrical Engineering |
+| Robert Ribeiro Gomes | 0000-0003-3831-2264 | Mestrando — PPGEE/UFMG |
+| Bruno Ribeiro Chaves | 0009-0000-4130-3209 | Graduando em Engenharia Elétrica — UFMG |
+| Renan Fernandes Kozan | 0000-0002-1056-0904 | Professor — UFMG |
+| Dalton Martini Colombo | 0000-0002-6781-9673 | Professor — UFMG |
+
+Trabalho desenvolvido no **LEB — Laboratório de Engenharia Biomédica da UFMG**.
 
 ### Resumo
 
@@ -181,12 +185,17 @@ Trabalho financiado em parte pela CAPES (Finance Code 001), pelo Instituto Serra
 ### Como citar
 
 ```bibtex
-@inproceedings{gomes_lowpower_semg,
-  title       = {A Low-Power Bluetooth LE Surface EMG Sensor},
-  author      = {Gomes, Robert Ribeiro and Chaves, Bruno Ribeiro and
-                 Kozan, Renan Fernandes and Colombo, Dalton Martini},
-  institution = {Universidade Federal de Minas Gerais},
-  address     = {Belo Horizonte, Brazil}
+@inproceedings{gomes2025lowpower,
+  title     = {A Low-Power Bluetooth LE Surface EMG Sensor},
+  author    = {Gomes, Robert Ribeiro and Chaves, Bruno Ribeiro and
+               Kozan, Renan Fernandes and Colombo, Dalton Martini},
+  booktitle = {Anais do XVI Simp\'osio de Engenharia Biom\'edica (SEB 2025)},
+  year      = {2025},
+  month     = {9},
+  address   = {Uberl\^andia, MG, Brasil},
+  publisher = {Universidade Federal de Uberl\^andia},
+  issn      = {2358-3568},
+  url       = {https://seb2025.sciencesconf.org/}
 }
 ```
 
@@ -528,11 +537,11 @@ MIT License - Veja [LICENSE](LICENSE) para detalhes
 **Firmware e desenvolvimento**
 - Bruno Chaves - [GitHub](https://github.com/brunorchaves)
 
-**Autores do artigo** (Universidade Federal de Minas Gerais)
-- Robert Ribeiro Gomes
-- Bruno Ribeiro Chaves
-- Renan Fernandes Kozan
-- Dalton Martini Colombo
+**Autores do artigo** (LEB — Laboratório de Engenharia Biomédica, UFMG)
+- Robert Ribeiro Gomes — mestrando, PPGEE/UFMG
+- Bruno Ribeiro Chaves — graduando em Engenharia Elétrica, UFMG
+- Renan Fernandes Kozan — professor, UFMG
+- Dalton Martini Colombo — professor, UFMG
 
 ---
 
