@@ -13,3 +13,6 @@ Thumbs.db
 *.swp
 *.swo
 *~
+
+# Notificacao de Invencao (contem dados pessoais dos inventores - CPF, RG, endereco)
+Notificacao-de-Invencao-UFMG*.docx
