@@ -535,10 +535,41 @@ bool ds3502_set_resistance(nrfx_twi_t *twi, uint8_t value) {
 
     return (err == NRFX_SUCCESS);
 }
-// === Butterworth Filter (Order 2, Bandpass 20–400 Hz, Fs = 2000 Hz) ===
+// === Butterworth digital, ordem 2, passa-banda 20-400 Hz ===
+//
+// Os coeficientes DEPENDEM da taxa de amostragem, e por isso sao selecionados
+// pelo mesmo ADS_TURBO_MODE que define a taxa do ADC (em ADS112C04.h). Antes
+// existia apenas o conjunto de 2000 Hz: rodar a 1000 SPS dividia por dois
+// todas as frequencias de corte em silencio, e a banda de 20-400 Hz virava
+// 10-200 Hz. Medido na bancada com o conjunto errado: a razao entre o 3o
+// harmonico da rede (180 Hz) e a fundamental caiu de 0,0754 para 0,0000,
+// ~44 dB de atenuacao indevida.
+//
+// Gerados com mkfilter (github.com/.../mkfilter_in_python), que reproduz
+// exatamente os coeficientes originais para 2000 Hz - conferido bit a bit:
+//   2 kSPS: python mkfilter.py -Bu -Bp -o 2 -f 20 400 -s 2000 -c
+//   1 kSPS: python mkfilter.py -Bu -Bp -o 2 -f 20 400 -s 1000 -c
+//
+// Resposta verificada numericamente nos dois casos: cortes de -3 dB em
+// 20,0 Hz e 400,0 Hz, e 180 Hz dentro da banda plana.
 #define NZEROS 4
 #define NPOLES 4
-#define GAIN   5.182411747f
+
+#if ADS_SAMPLE_RATE_SPS == 2000
+  #define GAIN     5.182411747f
+  #define FILT_Y0 (-0.2066719852f)
+  #define FILT_Y1 ( 0.8192636853f)
+  #define FILT_Y2 (-1.9509646898f)
+  #define FILT_Y3 ( 2.3350824021f)
+#elif ADS_SAMPLE_RATE_SPS == 1000
+  #define GAIN     1.715890586f
+  #define FILT_Y0 (-0.3476653949f)
+  #define FILT_Y1 (-0.1939361276f)
+  #define FILT_Y2 ( 0.8157085862f)
+  #define FILT_Y3 ( 0.6874450146f)
+#else
+  #error "Nao ha coeficientes de filtro para esta ADS_SAMPLE_RATE_SPS - gere com mkfilter antes de compilar"
+#endif
 
 static float xv[NZEROS + 1] = {0}, yv[NPOLES + 1] = {0};
 
@@ -547,8 +578,8 @@ float butterworth_filter(float input) {
     xv[4] = input / GAIN;
     yv[0] = yv[1]; yv[1] = yv[2]; yv[2] = yv[3]; yv[3] = yv[4];
     yv[4] = (xv[0] + xv[4]) - 2 * xv[2]
-          + (-0.2066719852f * yv[0]) + (0.8192636853f * yv[1])
-          + (-1.9509646898f * yv[2]) + (2.3350824021f * yv[3]);
+          + (FILT_Y0 * yv[0]) + (FILT_Y1 * yv[1])
+          + (FILT_Y2 * yv[2]) + (FILT_Y3 * yv[3]);
     return yv[4];
 }
 

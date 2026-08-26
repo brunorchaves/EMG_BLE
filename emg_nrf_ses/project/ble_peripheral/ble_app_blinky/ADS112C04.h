@@ -8,6 +8,30 @@
 // Default I2C address
 #define ADS112C04_ADDRESS 0x40
 
+// === Taxa de amostragem ===
+// Com data_rate = 0x06 (DR=110), o ADS112C04 entrega 1000 SPS em modo NORMAL e
+// 2000 SPS em modo TURBO (o turbo dobra o clock interno do modulador e, com
+// ele, a corrente do ADC).
+//
+// Fica no HEADER, e nao no .c, porque o main.c precisa do mesmo valor para
+// escolher os coeficientes do filtro digital: eles dependem da taxa, e antes
+// so existia o conjunto de 2000 Hz. Rodar a 1000 SPS dividia por dois todas as
+// frequencias de corte em silencio - a banda de 20-400 Hz virava 10-200 Hz.
+// Amarrando os dois ao mesmo flag, nao ha como sairem de sincronia.
+//
+// 1 -> 2000 SPS (validado)
+// 0 -> 1000 SPS (~37% menos consumo, medido; exige os coeficientes de 1 kHz,
+//                que ja estao em main.c e sao selecionados por este flag)
+#ifndef ADS_TURBO_MODE
+#define ADS_TURBO_MODE 1
+#endif
+
+#if ADS_TURBO_MODE
+#define ADS_SAMPLE_RATE_SPS 2000
+#else
+#define ADS_SAMPLE_RATE_SPS 1000
+#endif
+
 // Commands
 #define ADS112C04_RESET_CMD          0x06
 #define ADS112C04_START_CMD          0x08

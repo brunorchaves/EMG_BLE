@@ -274,8 +274,8 @@ def fig_1khz(runs: dict) -> plt.Figure:
     r2k, r1k = runs.get("3V3"), runs.get("3V3_1kSPS")
     fig = plt.figure(figsize=(11.7, 8.3))
     S.page_header(fig, "adc a 1 kSPS",
-                  "1 kSPS corta 37% do consumo e destrói a banda de 200–400 Hz",
-                  "O ganho é real e a perda também — e a perda é corrigível.")
+                  "1 kSPS corta 37% do consumo, e a banda foi restaurada",
+                  "Coeficientes recalculados para fs=1000; o filtro analógico fica como está.")
 
     ax = fig.add_axes([0.075, 0.525, 0.38, 0.255])
     ax2 = fig.add_axes([0.555, 0.525, 0.385, 0.255])
@@ -312,7 +312,8 @@ def fig_1khz(runs: dict) -> plt.Figure:
             ax2.text(hz + 4, 0.5, lbl, fontsize=7.4, color=S.ALERT, rotation=90, va="center")
         ax2.set_xlim(0, 450); ax2.set_ylim(1e-8, 3)
         ax2.set_xlabel("Frequência (Hz)"); ax2.set_ylabel("PSD normalizada")
-        ax2.legend(fontsize=7.8); ax2.set_title("Espectro: o 3º harmônico desaparece", fontsize=10)
+        ax2.legend(fontsize=7.8)
+        ax2.set_title("Espectro com os coeficientes de 2 kHz a 1 kSPS", fontsize=10)
 
     body = [
         ("O que se ganha",
@@ -320,21 +321,25 @@ def fig_1khz(runs: dict) -> plt.Figure:
          "Potência média 14,46 → 9,10 mW; autonomia projetada 87 → 138 h. Vem de três fontes: o ADC "
          "sai do modo turbo (que dobra o clock interno do modulador), as transações I²C caem pela "
          "metade, e o rádio transmite metade dos blocos."),
-        ("O que se perde, e é grave se não for corrigido",
-         "O filtro Butterworth digital em main.c foi projetado para fs = 2000 Hz. Rodando a 1000 SPS "
-         "com os mesmos coeficientes, todas as frequências de corte caem pela metade: a banda de "
-         "20–400 Hz vira 10–200 Hz. Medido: a razão entre o 3º harmônico da rede (180 Hz) e a "
-         "fundamental cai de 0,0754 para 0,0000 — cerca de 44 dB de atenuação, o harmônico "
-         "simplesmente desaparece. A energia entre 200 e 400 Hz cai de 2,1% para 0,2%."),
-        ("Mesmo recalculando os coeficientes, há um limite físico",
-         "A 1000 SPS o Nyquist é 500 Hz, e o anti-aliasing é analógico: um Sallen-Key de 2ª ordem em "
-         "482 Hz, ou seja −40 dB/decada. Conteúdo em 600 Hz volta dobrado sobre 400 Hz com apenas "
-         "~4 dB de atenuação. A 2 kSPS o mesmo filtro atenua ~18 dB no ponto equivalente. Recomendação: "
-         "1 kSPS é aceitável se a banda útil for redefinida para ~300 Hz e os coeficientes recalculados; "
-         "para os 400 Hz que o artigo reivindica, manter 2 kSPS."),
+        ("O que se perdia, e já foi corrigido",
+         "Os coeficientes do Butterworth dependem da taxa, e existia apenas o conjunto de fs = 2000 Hz: "
+         "rodando a 1000 SPS com ele, a banda de 20–400 Hz virava 10–200 Hz em silêncio (energia em "
+         "200–400 Hz caindo de 2,1% para 0,2%, joelho do piso de ruído em ~223 Hz). Os coeficientes de "
+         "1 kHz foram gerados com mkfilter e verificados numericamente — cortes de −3 dB em exatamente "
+         "20,0 e 400,0 Hz. Com eles a energia volta a 2,4% e o joelho vai para ~456 Hz. Os dois "
+         "conjuntos agora são escolhidos pelo mesmo flag que define a taxa, e não podem dessincronizar."),
+        ("Correção de uma análise anterior: o anti-aliasing não é problema",
+         "Uma versão anterior deste relatório tratava o Sallen-Key de 2ª ordem em 482 Hz como "
+         "anti-aliasing insuficiente para Nyquist de 500 Hz. Está errado: o ADS112C04 é delta-sigma, e "
+         "seu filtro digital interno atenua de fDR/2 até fMOD. O analógico só precisa bloquear perto de "
+         "fMOD, onde tem ~109 dB de folga em 256 kHz. Mantê-lo como está é correto nas duas taxas."),
+        ("A decisão que sobra",
+         "A 1 kSPS a banda de 30–400 Hz do artigo é preservada; muda só a taxa, de 2 kS/s para "
+         "1 kS/s — Nyquist de 500 Hz para banda de 400 Hz, margem de 25%, apertada mas legítima. "
+         "Aceitar isso como especificação publicada rende 37%. Default do firmware: 2 kSPS."),
     ]
-    _text_blocks(fig, body, y0=0.425)
-    S.page_footer(fig, "ADS_TURBO_MODE em ADS112C04.c", "espectro com fs de aquisição real")
+    _text_blocks(fig, body, y0=0.435)
+    S.page_footer(fig, "ADS_TURBO_MODE em ADS112C04.h", "coeficientes gerados com mkfilter")
     return fig
 
 
