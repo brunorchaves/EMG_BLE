@@ -74,6 +74,23 @@
 #define FIFO_SIZE         64
 #define UART_BUFFER_SIZE  16
 
+// === Economia de energia: UART e LEDs desligados ===
+//
+// ENABLE_UART = 0 desliga a UART0 por completo. Motivos:
+//  1. O TX (P1.11) nao vai a lugar nenhum na PCB - o firmware imprimia em
+//     pino desconectado, gastando energia a troco de nada.
+//  2. O RX (P1.12) e o MESMO pino do LED2, que tem o anodo no VCC de 5 V via
+//     R21 = 1 kOhm. Com o pino configurado como ENTRADA de UART, corre
+//     corrente do trilho de 5 V pelos diodos de protecao do pino - e por isso
+//     que o LED2 ficava com um brilho basal permanente. Desligar a UART e
+//     passar o pino a saida em nivel alto elimina esse caminho parasita.
+//
+// ENABLE_LED_BLINK = 0 mantem o LED1 (P1.13) sempre apagado. Medido nesta
+// bancada: o LED aceso custa 2,43 mA (ADVERTISING) a 2,74 mA (STREAMING), com
+// duty de 50%, ou seja ~1,2 mA medios - a maior economia unica identificada.
+#define ENABLE_UART        0
+#define ENABLE_LED_BLINK   0
+
 NRF_BLE_GATT_DEF(m_gatt);
 NRF_BLE_QWR_DEF(m_qwr);
 APP_TIMER_DEF(m_led_timer_id);
@@ -564,6 +581,7 @@ void uart_handler(nrfx_uart_event_t const *p_event, void *p_context) {
 }
 
 void uart_init(void) {
+#if ENABLE_UART
     nrfx_uart_config_t config = {
         .pseltxd = UART_TX_PIN,
         .pselrxd = UART_RX_PIN,
@@ -575,9 +593,28 @@ void uart_init(void) {
         .interrupt_priority = NRFX_UART_DEFAULT_CONFIG_IRQ_PRIORITY
     };
     nrfx_uart_init(&m_uart, &config, uart_handler);
+#else
+    // UART desligada: os dois pinos passam a SAIDA em nivel alto.
+    //
+    // Isto e o que efetivamente apaga o LED2 e mata o brilho basal. O LED2 tem
+    // o anodo no VCC de 5 V via 1 kOhm e o catodo neste pino. Com o pino como
+    // entrada (era o caso, sendo RX de UART), a corrente encontrava caminho
+    // pelos diodos de protecao. Com o pino em nivel alto (~3,3 V), a tensao
+    // sobre LED + resistor cai para ~1,7 V, abaixo da tensao direta do LED, e
+    // nao circula corrente.
+    nrf_gpio_cfg_output(UART_RX_PIN);
+    nrf_gpio_pin_write(UART_RX_PIN, 1);
+    nrf_gpio_cfg_output(UART_TX_PIN);
+    nrf_gpio_pin_write(UART_TX_PIN, 1);
+    NRF_LOG_INFO("UART desabilitada; P1.11/P1.12 em nivel alto (LED2 apagado)");
+#endif
 }
 
 void uart_print_async(const char *str) {
+#if !ENABLE_UART
+    (void)str;   // UART desligada: descarta sem custo, sem tocar no periferico
+    return;
+#else
     size_t len = strlen(str);
     if (len < sizeof(m_uart_buffer[0])) {
         uint8_t next_head = (m_uart_buffer_head + 1) % UART_BUFFER_SIZE;
@@ -593,6 +630,7 @@ void uart_print_async(const char *str) {
             }
         }
     }
+#endif
 }
 
 // === FIFO Sample Buffer ===
@@ -829,9 +867,18 @@ int main(void) {
     static int16_t ble_packet_buffer[EMG_PACKET_SIZE];
     uint8_t packet_index = 0;
 
+#if ENABLE_LED_BLINK
     // Inicia LED blink via app_timer (usa LFCLK, sem manter HFCLK ativo)
     ret_code_t err_code_led = app_timer_start(m_led_timer_id, APP_TIMER_TICKS(1000), NULL);
     APP_ERROR_CHECK(err_code_led);
+#else
+    // LED1 permanentemente apagado (economia de ~1,2 mA medios, medida).
+    // O pino fica em nivel alto, mesmo esquema do LED2: anodo no VCC de 5 V
+    // via 1 kOhm, entao nivel alto no catodo deixa a tensao abaixo da tensao
+    // direta do LED e nao circula corrente.
+    nrf_gpio_pin_write(LED_PIN, 1);
+    NRF_LOG_INFO("LED1 desabilitado (economia de energia)");
+#endif
 
     NRF_LOG_INFO("========================================");
     NRF_LOG_INFO("System ready - low-power mode");
