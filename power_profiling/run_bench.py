@@ -97,6 +97,49 @@ async def run_bench(
     calib = stream.open()
     stream.dut_power(False)
 
+    # Mede a taxa de aquisicao real do ADC ANTES de comecar a captura.
+    # Motivo de estar aqui e nao no fim: ler os contadores exige uma sessao
+    # J-Link, que em nRF52 infla a corrente - fazendo isso fora da janela
+    # medida, a medicao nao e perturbada. E tem de ser com a placa ligada,
+    # entao nao pode ser depois do run (que termina com a alimentacao
+    # desligada). Este numero e o fs correto para a analise espectral: usar a
+    # taxa de ENTREGA escalaria todo o eixo de frequencia (ver
+    # emg_validate.validate_stream).
+    fs_acq = None
+    try:
+        import fw_counters
+
+        stream.dut_power(True)
+        await asyncio.sleep(3.0)  # espera o boot
+        s1 = fw_counters.snapshot()
+        await asyncio.sleep(5.0)
+        s2 = fw_counters.snapshot()
+        fs_acq = (s2.get("g_adc_ok_count", 0) - s1.get("g_adc_ok_count", 0)) / 5.0
+        drdy_rate = (s2.get("g_drdy_count", 0) - s1.get("g_drdy_count", 0)) / 5.0
+        print(f"pre-run: aquisicao do ADC = {fs_acq:.0f} S/s, DRDY = {drdy_rate:.0f}/s, "
+              f"init_status = 0x{s2.get('g_init_status', 0):02X}")
+        (out_dir / "fw_counters.json").write_text(
+            json.dumps(
+                {
+                    "measured": "pre-run, fora da janela de medicao",
+                    "snapshot_1": s1,
+                    "snapshot_2": s2,
+                    "interval_s": 5.0,
+                    "fs_acquisition_sps": fs_acq,
+                    "drdy_rate_hz": drdy_rate,
+                },
+                indent=2,
+            ),
+            encoding="utf-8",
+        )
+    except Exception as e:  # noqa: BLE001
+        print(f"aviso: nao consegui medir a taxa de aquisicao: {e}", file=sys.stderr)
+    finally:
+        # volta a desligar: o run tem de comecar do estado OFF para medir o
+        # transiente de BOOT (inrush), que e o dado critico para supercapacitor
+        stream.dut_power(False)
+        await asyncio.sleep(1.5)
+
     clock = Clock.start_now()
     log = EventLog()
     events_path = out_dir / "events.jsonl"
@@ -213,14 +256,27 @@ async def run_bench(
     import numpy as np
 
     if all_packets:
-        np.savez(
-            out_dir / "emg_packets.npz",
-            t_os=np.array([p.t_os if p.t_os is not None else np.nan for p in all_packets]),
-            t_host=np.array([p.t_host for p in all_packets]),
-            n_bytes=np.array([p.n_bytes for p in all_packets]),
-            gain_level=np.array([p.gain_level for p in all_packets]),
-            samples=np.array([p.samples for p in all_packets if len(p.samples) == config.EMG_SAMPLES_PER_PACKET] or [[]]),
-        )
+        # Só os pacotes completos entram no .npz, e TODOS os arrays são
+        # filtrados pelo mesmo critério. A versão anterior filtrava apenas
+        # `samples` mas mantinha t_os/t_host/n_bytes/gain_level com todos os
+        # pacotes: bastava um pacote curto (MTU truncando, por exemplo) para
+        # desalinhar os índices e associar silenciosamente cada bloco de
+        # amostras ao timestamp de outro pacote.
+        full = [p for p in all_packets if len(p.samples) == config.EMG_SAMPLES_PER_PACKET]
+        n_short = len(all_packets) - len(full)
+        if n_short:
+            print(f"  aviso: {n_short} pacote(s) com tamanho != {config.EMG_PAYLOAD_BYTES} B descartado(s) do .npz")
+        if full:
+            np.savez(
+                out_dir / "emg_packets.npz",
+                t_os=np.array([p.t_os if p.t_os is not None else np.nan for p in full]),
+                t_host=np.array([p.t_host for p in full]),
+                n_bytes=np.array([p.n_bytes for p in full]),
+                gain_level=np.array([p.gain_level for p in full]),
+                samples=np.stack([p.samples for p in full]),
+                n_packets_total=np.array([len(all_packets)]),
+                n_packets_short=np.array([n_short]),
+            )
 
     ble_stats = ble.stats()
     (out_dir / "ble_stats.json").write_text(json.dumps(asdict(ble_stats), indent=2), encoding="utf-8")

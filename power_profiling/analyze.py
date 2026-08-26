@@ -45,6 +45,17 @@ class StateStats:
     radio_duty: float
     n_range_switches: int
     has_gap: bool
+    # Estatisticas EXCLUINDO a vizinhanca das trocas de faixa de medicao.
+    # Necessario porque a PPK2 produz artefatos grandes nessas transicoes:
+    # medido nesta bancada, 100% das amostras acima de 30 mA estavam a +-3
+    # amostras de uma troca de faixa, e o "maximo" bruto chegava a 563 mA -
+    # fisicamente impossivel nesta placa a 5 V. A MEDIA quase nao e afetada
+    # (6,648 vs 6,707 mA), mas qualquer numero de PICO tem de ser o limpo,
+    # senao o relatorio mente por um fator de ~20x.
+    mean_clean_uA: float = float("nan")
+    p99_9_clean_uA: float = float("nan")
+    max_clean_uA: float = float("nan")
+    n_samples_clean: int = 0
     flags: list[str] = field(default_factory=list)
 
 
@@ -86,6 +97,18 @@ class RunReport:
     warnings: list[str]
 
 
+def _range_switch_mask(range_idx: np.ndarray, halfwidth: int = 3) -> np.ndarray:
+    """Marca as amostras a +-halfwidth de uma troca de faixa de medicao, onde a
+    PPK2 gera artefatos grandes de corrente."""
+    switches = np.flatnonzero(np.diff(range_idx.astype(np.int16)) != 0) + 1
+    mask = np.zeros(len(range_idx), dtype=bool)
+    for off in range(-halfwidth, halfwidth + 1):
+        idx = switches + off
+        idx = idx[(idx >= 0) & (idx < len(range_idx))]
+        mask[idx] = True
+    return mask
+
+
 def per_state_stats(
     uA: np.ndarray,
     bands: list[Band],
@@ -93,7 +116,9 @@ def per_state_stats(
     fs: float,
     logic: np.ndarray | None = None,
     counter_report: CounterReport | None = None,
+    range_idx: np.ndarray | None = None,
 ) -> list[StateStats]:
+    switch_mask = _range_switch_mask(range_idx) if range_idx is not None else None
     out = []
     for b in bands:
         lo, hi = b.guarded_indices(fs)
@@ -118,9 +143,21 @@ def per_state_stats(
             has_gap = bool(np.any((counter_report.gap_index >= lo) & (counter_report.gap_index < hi)))
 
         n_range_switches = 0
+        mean_clean = p999_clean = max_clean = float("nan")
+        n_clean = 0
+        if switch_mask is not None:
+            band_switch = switch_mask[lo:hi]
+            n_range_switches = int(np.count_nonzero(np.diff(range_idx[lo:hi].astype(np.int16)) != 0))
+            clean = seg[~band_switch]
+            n_clean = len(clean)
+            if n_clean:
+                mean_clean = float(clean.mean())
+                p999_clean = float(np.percentile(clean, 99.9))
+                max_clean = float(clean.max())
+
         flags = []
         if has_gap:
-            flags.append("gap_no_contador_dentro_da_banda")
+            flags.append("descontinuidade_do_contador_na_banda")
         if b.state == config.State.CONNECTED_IDLE.value:
             flags.append("firmware_bug_suspect: packet_index sem bound-check quando CCCD desabilitado (main.c:743)")
 
@@ -148,6 +185,10 @@ def per_state_stats(
                 radio_duty=radio_duty,
                 n_range_switches=n_range_switches,
                 has_gap=has_gap,
+                mean_clean_uA=mean_clean,
+                p99_9_clean_uA=p999_clean,
+                max_clean_uA=max_clean,
+                n_samples_clean=n_clean,
                 flags=flags,
             )
         )
@@ -273,14 +314,28 @@ def analyze_run(run_dir: Path, spike_filter: bool = False, guard_s: float = 0.25
     fit = fit_stream_clock(chunks, fs_nominal=config.PPK2_FS_NOMINAL)
 
     words = load_raw(run_dir / "current_raw.u32")
-    counter_report = check_counter(((words.astype(np.uint32) >> 18) & 0x3F).astype(np.uint8))
-    block = decode_words(words.astype(np.uint32), calib, source_v, spike_filter=spike_filter)
+    w = words.astype(np.uint32)
+    # passa a faixa de medicao para o check_counter distinguir descarte do
+    # instrumento (troca de faixa) de perda real de captura
+    counter_report = check_counter(
+        ((w >> 18) & 0x3F).astype(np.uint8),
+        range_idx=((w >> 14) & 0x07).astype(np.uint8),
+    )
+    block = decode_words(w, calib, source_v, spike_filter=spike_filter)
 
     log = EventLog.from_jsonl(run_dir / "events.jsonl")
     seq = [s.value for s in config.State]
     bands = build_bands(log, seq, fit, guard_s=guard_s)
 
-    stats = per_state_stats(block.current_uA, bands, source_v, fit.fs_effective, block.logic, counter_report)
+    stats = per_state_stats(
+        block.current_uA,
+        bands,
+        source_v,
+        fit.fs_effective,
+        block.logic,
+        counter_report,
+        range_idx=block.range_idx,
+    )
 
     warnings: list[str] = list(counter_report.reasons)
 
@@ -304,8 +359,21 @@ def analyze_run(run_dir: Path, spike_filter: bool = False, guard_s: float = 0.25
 
             streaming_bands = [b for b in bands if b.state == config.State.STREAMING.value]
             duration_s = sum(b.duration_s for b in streaming_bands) or None
+
+            # taxa de aquisicao REAL medida pelo contador do firmware (não a
+            # de entrega) - essencial para a análise espectral não sair com o
+            # eixo de frequência escalado. Ver emg_validate.validate_stream.
+            fs_acq = None
+            fwc_path = run_dir / "fw_counters.json"
+            if fwc_path.exists():
+                fs_acq = json.loads(fwc_path.read_text(encoding="utf-8")).get("fs_acquisition_sps")
+
             validation = emg_validate.validate_stream(
-                packets, uA=block.current_uA, fs_ppk2=fit.fs_effective, duration_s=duration_s
+                packets,
+                uA=block.current_uA,
+                fs_ppk2=fit.fs_effective,
+                duration_s=duration_s,
+                fs_acquisition=fs_acq,
             )
             validation_dict = asdict(validation)
             if validation.verdict != "real":
@@ -360,12 +428,22 @@ def _write_report_md(run_dir: Path, report: RunReport, meta: dict) -> None:
     lines.append(f"- latência p50/p95/max: {report.clock_fit['latency_p50_ms']:.2f} / {report.clock_fit['latency_p95_ms']:.2f} / {report.clock_fit['latency_max_ms']:.2f} ms")
     lines.append("")
     lines.append("## Por estado")
-    lines.append("| Estado | Duração (s) | Média (mA) | RMS (mA) | Potência média (mW) |")
-    lines.append("|---|---|---|---|---|")
+    lines.append(
+        "Picos (p99.9 / máx) **excluem** a vizinhança das trocas de faixa da PPK2, "
+        "onde o instrumento gera artefatos de até ~20× o valor real. A média é "
+        "praticamente insensível a isso (<1%)."
+    )
+    lines.append("")
+    lines.append(
+        "| Estado | Dur (s) | Média (mA) | RMS (mA) | p95 (mA) | p99.9 limpo (mA) | Máx limpo (mA) | Pot. média (mW) |"
+    )
+    lines.append("|---|---|---|---|---|---|---|---|")
     for s in report.state_stats:
         lines.append(
             f"| {s['state']} | {s['duration_s']:.1f} | {s['mean_uA']/1000:.3f} | "
-            f"{s['rms_uA']/1000:.3f} | {s['mean_mW']:.2f} |"
+            f"{s['rms_uA']/1000:.3f} | {s['p95_uA']/1000:.3f} | "
+            f"{s.get('p99_9_clean_uA', float('nan'))/1000:.3f} | "
+            f"{s.get('max_clean_uA', float('nan'))/1000:.3f} | {s['mean_mW']:.2f} |"
         )
     if report.emg_validation:
         lines.append("")

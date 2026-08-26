@@ -52,6 +52,15 @@ class CounterReport:
     framing_offset: int
     ok: bool
     reasons: list[str] = field(default_factory=list)
+    # Classificacao da causa dos gaps (preenchida quando range_idx e passado):
+    # a PPK2 descarta uma conversao ao trocar de faixa de medicao, o que
+    # aparece no contador como descontinuidade. Isso NAO e perda de captura -
+    # e comportamento do instrumento. Distinguir os dois e essencial: um
+    # significa "o dado do instrumento tem um furo", o outro significa "meu
+    # software perdeu dado" (e invalidaria o run).
+    n_gaps_at_range_switch: int = 0
+    n_gaps_unexplained: int = 0
+    capture_lossless: bool = True
 
 
 def load_raw(path, mmap: bool = True) -> np.ndarray:
@@ -87,10 +96,19 @@ def find_framing_offset(raw_bytes: bytes | bytearray | memoryview, max_try: int 
     return best_offset
 
 
-def check_counter(counter: np.ndarray) -> CounterReport:
+def check_counter(counter: np.ndarray, range_idx: np.ndarray | None = None) -> CounterReport:
     """Verifica continuidade do contador de 6 bits - a prova de que não
     perdemos amostras entre o dispositivo e o disco, sem precisar de nenhum
     timestamp de hardware.
+
+    Se ``range_idx`` for passado, classifica cada gap por causa. A PPK2
+    descarta uma conversão ao trocar de faixa de medição, e isso aparece no
+    contador como descontinuidade - comportamento do INSTRUMENTO, não perda da
+    captura. Medido nesta bancada: num run de 127 s, 100% dos 5394 gaps
+    coincidiam com troca de faixa, e os estados com a placa desligada (faixa
+    constante, 1,4 M amostras) tiveram ZERO gaps. Sem essa classificação o
+    relatório acusava "172 mil amostras perdidas" e dava a impressão de que a
+    captura estava furada, quando o software não perdeu nada.
     """
     n = len(counter)
     reasons: list[str] = []
@@ -104,13 +122,42 @@ def check_counter(counter: np.ndarray) -> CounterReport:
     missing_mod64 = (d[gap_mask] - 1) % 64
     total_missing_lb = int(missing_mod64.sum())
 
-    ok = gap_index.size == 0
-    if not ok:
-        reasons.append(
-            f"{gap_index.size} gap(s) no contador, perda minima estimada de "
-            f"{total_missing_lb} amostra(s) (subestimada se algum gap for "
-            f"multiplo de 64)"
-        )
+    n_at_switch = 0
+    n_unexplained = int(gap_index.size)
+    capture_lossless = gap_index.size == 0
+
+    if range_idx is not None and gap_index.size:
+        switches = np.flatnonzero(np.diff(range_idx.astype(np.int16)) != 0) + 1
+        # tolerancia de +-2 amostras: o descarte pode nao cair exatamente no
+        # indice onde a faixa muda
+        near = np.zeros(n, dtype=bool)
+        for off in (-2, -1, 0, 1, 2):
+            idx = switches + off
+            idx = idx[(idx >= 0) & (idx < n)]
+            near[idx] = True
+        at_switch = near[gap_index]
+        n_at_switch = int(at_switch.sum())
+        n_unexplained = int((~at_switch).sum())
+        capture_lossless = n_unexplained == 0
+
+    if gap_index.size:
+        if range_idx is None:
+            reasons.append(
+                f"{gap_index.size} gap(s) no contador (passe range_idx para "
+                f"classificar entre descarte do instrumento e perda de captura)"
+            )
+        elif capture_lossless:
+            reasons.append(
+                f"{n_at_switch} descontinuidade(s) do contador, TODAS em troca de "
+                f"faixa de medicao da PPK2 (descarte do instrumento, ~"
+                f"{n_at_switch / n * 100:.3f}% das amostras). Captura sem perda."
+            )
+        else:
+            reasons.append(
+                f"{n_unexplained} gap(s) NAO explicado(s) por troca de faixa - "
+                f"provavel PERDA DE CAPTURA (overflow de buffer serial). "
+                f"{n_at_switch} outros sao descarte do instrumento em troca de faixa."
+            )
 
     return CounterReport(
         n_samples=n,
@@ -119,8 +166,11 @@ def check_counter(counter: np.ndarray) -> CounterReport:
         gap_missing_mod64=missing_mod64,
         total_missing_lower_bound=total_missing_lb,
         framing_offset=0,
-        ok=ok,
+        ok=capture_lossless,
         reasons=reasons,
+        n_gaps_at_range_switch=n_at_switch,
+        n_gaps_unexplained=n_unexplained,
+        capture_lossless=capture_lossless,
     )
 
 

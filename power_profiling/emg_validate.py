@@ -65,11 +65,37 @@ class EmgValidation:
 
 
 def _iat_stats(t: np.ndarray) -> tuple[float, float, float, float]:
+    """Estatisticas do intervalo entre chegadas, e estimativa do intervalo de
+    conexao.
+
+    A distribuicao de IAT e BIMODAL desde que o firmware passou a enviar
+    varias notificacoes por evento de conexao: intervalos quase nulos DENTRO
+    de uma rajada, e ~intervalo_de_conexao ENTRE rajadas. A versao anterior
+    tomava a moda de todos os IATs, que nessa situacao cai no primeiro bin
+    (~0 ms) e nao representa o intervalo de conexao - chegava a dar divisao
+    por zero. Agora a estimativa usa so os intervalos ENTRE rajadas.
+    """
     if len(t) < 3:
         return float("nan"), float("nan"), float("nan"), float("nan")
     iat = np.diff(np.sort(t)) * 1000.0
-    hist, edges = np.histogram(iat, bins=30)
-    mode_ms = float(edges[np.argmax(hist)])
+    if len(iat) == 0:
+        return float("nan"), float("nan"), float("nan"), float("nan")
+
+    # separa "entre rajadas" de "dentro da rajada": 2 ms e bem abaixo de
+    # qualquer intervalo de conexao BLE valido (minimo 7,5 ms) e bem acima do
+    # tempo entre notificacoes consecutivas de uma mesma rajada
+    between = iat[iat > 2.0]
+    if between.size >= 3:
+        hist, edges = np.histogram(between, bins=min(30, max(3, between.size // 3)))
+        # centro do bin, nao a borda esquerda
+        idx = int(np.argmax(hist))
+        mode_ms = float((edges[idx] + edges[idx + 1]) / 2.0)
+    else:
+        mode_ms = float(np.median(iat))
+
+    if not np.isfinite(mode_ms) or mode_ms <= 0:
+        mode_ms = float("nan")
+
     return mode_ms, float(np.percentile(iat, 50)), float(np.percentile(iat, 95)), float(iat.max())
 
 
@@ -273,7 +299,11 @@ def validate_stream(
         reasons.append(f"{n_bad_length} pacote(s) com tamanho != 120 bytes (MTU truncando?)")
 
     cross_instrument_ok = True
-    if conn_iv_current_ms == conn_iv_current_ms and conn_iv_mode_ms == conn_iv_mode_ms:
+    if (
+        conn_iv_current_ms == conn_iv_current_ms
+        and conn_iv_mode_ms == conn_iv_mode_ms
+        and conn_iv_mode_ms > 0
+    ):
         cross_instrument_ok = abs(conn_iv_current_ms - conn_iv_mode_ms) / conn_iv_mode_ms < 0.15
         if not cross_instrument_ok:
             reasons.append(
