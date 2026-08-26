@@ -3,8 +3,18 @@
 Firmware profissional para aquisição e transmissão de sinais EMG via Bluetooth Low Energy (BLE) usando nRF52840, ADS112C04 e DS3502.
 
 Este é o firmware do sensor sEMG vestível de baixo consumo apresentado no artigo
-**"A Low-Power Bluetooth LE Surface EMG Sensor"** (LEB/UFMG, SEB 2025) — 45 mW transmitindo a 2 kS/s,
-~30% abaixo de sistemas comparáveis. Detalhes em [Publicação Científica](#-publicação-científica).
+**"A Low-Power Bluetooth LE Surface EMG Sensor"** (LEB/UFMG, SEB 2025).
+Detalhes em [Publicação Científica](#-publicação-científica).
+
+> **⚠️ Este README descreve o firmware ATUAL, que divergiu do artigo.**
+> Vários parâmetros publicados não correspondem ao código (TX power,
+> intervalo de advertising, PHY, taxa de pacotes), e a aquisição do ADC
+> **não funcionava**: sem nenhuma fonte de tempo governando a amostragem, o
+> ADC era lido ~1 vez por segundo em vez dos 2 kS/s reivindicados. Corrigido —
+> hoje são 2042 S/s medidos com 0% de conversões perdidas. Consumo e
+> desempenho medidos com PPK2 em
+> [Consumo e desempenho medidos](#-consumo-e-desempenho-medidos); as
+> divergências estão anotadas em cada seção.
 
 ## 📄 Publicação Científica
 
@@ -138,6 +148,18 @@ Os quatro modos de operação são: **OFF** (sistema desligado), **IDLE** (eletr
 conexão com um central BLE), **CONNECTED** (pareado, mas a característica BLE não está sendo lida) e
 **TRANSMITTING** (característica lida ativamente, pacotes enviados periodicamente).
 
+> **Reconciliação com as medições atuais (PPK2).** Remedindo com o firmware
+> corrigido: CONNECTED e TRANSMITTING **reproduzem** os valores publicados
+> (9,14 vs 8,50 mA e 9,06 vs 9,06 mA RMS). Já o IDLE ficou **~2,9× maior**
+> (8,46 vs 2,92 mA) — e isso não é regressão: no firmware do artigo não havia
+> fonte de tempo governando a amostragem, então o ADC era lido ~1 vez por
+> segundo e o "IDLE" era um dispositivo genuinamente dormindo. Os 2 kS/s que o
+> artigo reivindica não estavam acontecendo. Hoje o dispositivo adquire
+> 2042 S/s continuamente, conectado ou não. Ou seja: **o envelope de potência
+> publicado se reproduz, mas o dispositivo agora entrega ~2000× mais amostras
+> pela mesma energia.** Detalhes em
+> [`power_profiling/relatorio_consumo.pdf`](power_profiling/relatorio_consumo.pdf).
+
 **Tabela 3 — Comparação com outros sistemas de detecção sEMG**
 
 | Sistema | Canais | Resolução ADC (bits) | Transmissão | Banda (Hz) | Taxa (kS/s) |
@@ -163,10 +185,26 @@ reportados na literatura.
 
 ### Estratégias de baixo consumo no firmware
 
+Estratégias **descritas no artigo**:
+
 - Todos os periféricos não utilizados são desabilitados quando o rádio está desconectado
 - Rotina de gerenciamento de energia da Nordic invocada durante os períodos de *idle*
 - Potência de transmissão BLE reduzida para **-20 dBm**
 - Intervalo de *advertising* estendido de 40 ms (padrão) para **500 ms**, reduzindo o *duty cycle* do rádio
+
+> **Verificação contra o código.** Duas dessas quatro **não estão
+> implementadas**: `sd_ble_gap_tx_power_set` nunca é chamado (TX fica no default
+> de 0 dBm) e o advertising é de 200 ms, não 500 ms. A terceira ("periféricos
+> desabilitados quando desconectado") também não se sustenta: a aquisição roda
+> idêntica desconectado, conectado e transmitindo, e `ads112c04_powerdown()`
+> existe mas nunca é chamado. Só a rotina de gerenciamento de energia
+> (`nrf_pwr_mgmt_run` → `sd_app_evt_wait`) está de fato no loop.
+>
+> Medido, isso importa menos do que parece: o rádio inteiro custa 0,48 mA de
+> 6,80 mA, então implementar TX a −20 dBm renderia menos de 3%. O consumo está
+> na **aquisição** (~4,1 mA). Otimizações efetivamente aplicadas e as
+> pendentes estão em
+> [Otimizações implementadas](#otimizações-implementadas).
 
 ### Conclusão e trabalhos futuros
 
@@ -208,42 +246,56 @@ Trabalho financiado em parte pela CAPES (Finance Code 001), pelo Instituto Serra
 
 ## 🎯 Características
 
-- **Aquisição de alta performance** - ADS112C04 @ 2000 Hz, 16-bit
-- **Streaming BLE otimizado** - 60 amostras/pacote, MTU 247 bytes
-- **Controle de ganho remoto** - DS3502 digital potentiometer (1x-10x)
-- **Filtragem digital** - Butterworth bandpass 20-500 Hz
-- **BLE 2M PHY** - 2 Mbps throughput para streaming em tempo real
-- **Connection interval 7.5ms** - Latência ultra-baixa
-- **Buffer circular** - 60 amostras FIFO para transmissão em lote
-- **Logs detalhados** - NRF_LOG + UART para debug
+Valores **medidos** no firmware atual (ver [Consumo e desempenho medidos](#-consumo-e-desempenho-medidos)):
+
+- **Aquisição** — ADS112C04, 16 bits, **2042 S/s medidos**, governada pela interrupção de DRDY#, 0% de conversões perdidas
+- **Streaming BLE** — 60 amostras/pacote, 120 B por notificação, **~32 pacotes/s**, MTU 247, DLE 251
+- **Controle de ganho remoto** — DS3502 via I²C (ver ressalva em [Limitações conhecidas](#-limitações-conhecidas))
+- **Filtragem digital** — Butterworth passa-banda de 2ª ordem, 20–400 Hz, coeficientes amarrados à taxa de amostragem
+- **Consumo** — 6,80 mA a 5,0 V; **4,37 mA a 3,3 V**; 2,75 mA a 3,3 V com o ADC a 1 kSPS
+- **Buffer circular** — FIFO de 64 amostras, pacotes de 60
+- **Diagnóstico** — contadores em RAM legíveis via J-Link, independentes do BLE
 
 ## 🔧 Hardware
 
 ### Componentes Principais
-- **MCU**: nRF52840 (Nordic Semiconductor)
-- **ADC**: ADS112C04 (Texas Instruments) - 24-bit, I2C
-- **Potenciômetro Digital**: DS3502 (Maxim) - 10kΩ, I2C
+- **MCU**: nRF52840 (módulo Seeed XIAO nRF52840)
+- **ADC**: ADS112C04 (Texas Instruments) — **16 bits**, delta-sigma, I²C
+- **Potenciômetro Digital**: DS3502 (Maxim) — 10 kΩ, I²C
 - **Programador**: J-Link (SEGGER)
 
-### Pinout I2C
+### Pinout
 ```
-TWI0 (I2C):
-- SCL: P0.27
-- SDA: P0.26
+TWI0 (I2C) @ 400 kHz:
+- SDA:  P0.04
+- SCL:  P0.05
 
-Dispositivos:
-- ADS112C04: 0x45 (ADC)
-- DS3502: 0x28 (Potentiômetro)
+Outros:
+- DRDY# do ADC: P0.29  (interrupção que governa a amostragem)
+- RESET# do ADC: P0.28
+- LED1: P1.13   |  LED2: P1.12 (compartilhado com o RX da UART)
+- Livres para instrumentação: P0.02, P0.03, P1.14, P1.15
+
+Endereços I2C:
+- ADS112C04: 0x40
+- DS3502:    0x28
 ```
 
 ### Configuração ADS112C04
 ```c
-Sample Rate: 2000 Hz
-Resolution: 16-bit signed
-Input: Differential (AIN0/AIN1)
-Gain: 1x (ajustável via DS3502)
-Mode: Continuous conversion
+Data rate reg: DR=110 (0x06)
+Modo:          turbo    -> 2000 SPS   (ADS_TURBO_MODE = 1, default)
+               normal   -> 1000 SPS   (ADS_TURBO_MODE = 0, -37% de consumo)
+Resolução:     16 bits com sinal
+Entrada:       AIN0 vs AVSS (single-ended)
+PGA:           habilitado, ganho 1x (ajuste fino via DS3502)
+Referência:    AVDD
+Conversão:     contínua, leitura disparada por DRDY#
 ```
+
+`ADS_TURBO_MODE` vive em `ADS112C04.h` e define também qual conjunto de
+coeficientes do filtro digital `main.c` usa — os dois não podem sair de
+sincronia.
 
 ### Configuração DS3502
 ```c
@@ -257,13 +309,22 @@ Update: Real-time via BLE command
 
 ### GAP (Generic Access Profile)
 ```c
-Device Name: "EMG_BLE"
-Advertising Interval: 64 units (40ms)
-Connection Interval: 7.5-15ms (6-12 units)
-Slave Latency: 0
-Supervision Timeout: 4000ms
-PHY: BLE 2M (2 Mbps)
+Device Name:           "EMG_BLE"
+Advertising Interval:  320 units (200 ms), sem timeout
+Connection Interval:   75-100 ms (60-80 units)   // negociado ~93 ms com Windows
+Slave Latency:         0
+Supervision Timeout:   6000 ms
+PHY:                   BLE 1M   // escolhido por consumo, não 2M
+TX Power:              0 dBm (default da SoftDevice)
+GAP Event Length:      24 units (30 ms)
+Data Length Extension: 251
 ```
+
+> O artigo menciona TX a −20 dBm e advertising de 500 ms. **Nenhum dos dois
+> está implementado**: `sd_ble_gap_tx_power_set` nunca é chamado, e o
+> advertising é de 200 ms. Medido, o rádio inteiro custa apenas 0,48 mA
+> (diferença entre ADVERTISING e STREAMING), então reduzir a potência de TX
+> renderia menos de 3% do consumo total.
 
 ### GATT (Generic Attribute Profile)
 
@@ -273,16 +334,21 @@ Service UUID: 19b10001-1000-e8f2-537e-4f6cd168a114
 
 Characteristics:
 1. EMG Data (NOTIFY)
-   UUID: 19b10002-1000-e8f2-537e-4f6cd168a114
-   Format: Array of int16_t (60 samples)
-   Size: 120 bytes per notification
-   Rate: ~250 packets/second
+   UUID:   19b10002-1000-e8f2-537e-4f6cd168a114
+   Format: array de int16_t little-endian, 60 amostras
+           (reinterpret-cast cru: sem header, sequência ou timestamp)
+   Size:   120 bytes por notificação (123 B de PDU ATT)
+   Rate:   ~32 pacotes/s medidos  (= 2042 S/s ÷ 60)
 
 2. Gain Control (WRITE)
-   UUID: 19b10003-1000-e8f2-537e-4f6cd168a114
+   UUID:   19b10003-1000-e8f2-537e-4f6cd168a114
    Format: uint8_t (1-10)
-   Action: Updates DS3502 wiper value
+   Action: atualiza o wiper do DS3502  -- ver Limitações conhecidas
 ```
+
+Decodificação no host: `np.frombuffer(data, dtype='<i2')`. Cliente BLE de
+referência em [`power_profiling/ble_client.py`](power_profiling/ble_client.py)
+(o `esp_dongle_ble/` está obsoleto: nome e UUIDs do protótipo Arduino antigo).
 
 ### MTU Negotiation
 ```c
@@ -295,93 +361,125 @@ Packet overhead: 3 bytes (ATT header)
 ## 🚀 Instalação
 
 ### Pré-requisitos
-- **SEGGER Embedded Studio** 8.24+
-- **nRF5 SDK** 17.1.0
-- **SoftDevice** S140 v7.3.0
-- **J-Link** Software v8.96+
-- **nRF Command Line Tools**
+- **SEGGER Embedded Studio** 8.30a (testado; 8.24+ deve servir) — precisa de
+  licença gratuita para dispositivos Nordic, obtida em
+  [license.segger.com/Nordic.cgi](https://license.segger.com/Nordic.cgi) e
+  instalável pela CLI: `emLicense.exe install '<chave>'`
+- **nRF5 SDK** 17.1.0 (incluído em `emg_nrf_ses/`)
+- **SoftDevice** S140 **v7.2.0** (`s140_nrf52_7.2.0_softdevice.hex` na raiz)
+- **J-Link Software** — o driver USB do probe é instalado separadamente por
+  `<install>/USBDriver/InstDrivers.exe`, que exige privilégio de administrador
 
 ### Build e Flash
 
-1. **Abrir projeto no SES**:
+Este projeto padroniza a **CLI da SEGGER** (`emBuild.exe` e `JLink.exe`).
+**Não use `nrfjprog`.** Os scripts prontos resolvem os caminhos de instalação
+automaticamente, inclusive pastas versionadas (`JLink_V970`,
+`SEGGER Embedded Studio 8.30a`):
+
 ```bash
-cd emg_nrf_ses/project/ble_peripheral/ble_app_blinky/pca10056/s140/ses
-# Abrir ble_app_blinky_pca10056_s140.emProject
+# Loop do dia a dia: compila e grava
+bash .claude/skills/build-flash-nrf52/scripts/build_and_flash.sh Release
+
+# Placa nova ou recém-apagada: erase + SoftDevice + app
+bash .claude/skills/build-flash-nrf52/scripts/flash_all.sh Release
+
+# Passos individuais
+bash .claude/skills/build-flash-nrf52/scripts/build.sh Release
+bash .claude/skills/build-flash-nrf52/scripts/flash_app.sh Release
+bash .claude/skills/build-flash-nrf52/scripts/flash_softdevice.sh
+bash .claude/skills/build-flash-nrf52/scripts/erase.sh
+bash .claude/skills/build-flash-nrf52/scripts/rtt_log.sh rtt.txt
 ```
 
-2. **Compilar**:
+Se um executável reclamar de arquivo inexistente num caminho que claramente
+existe: os `.exe` da SEGGER são binários Windows nativos e não entendem
+caminhos `/c/...` do git-bash. Os scripts convertem via `cygpath -w` antes de
+passar qualquer caminho — faça o mesmo em comandos ad-hoc.
+
+**A placa precisa estar alimentada para o J-Link conectar.** Se não houver
+bateria, alimente pela PPK2 antes de gravar:
+
 ```bash
-# Via linha de comando (Windows)
-"C:/Program Files/Segger/SEGGER Embedded Studio 8.24/bin/emBuild.exe" \
-  -config Release -rebuild ble_app_blinky_pca10056_s140.emProject
-
-# Ou dentro do SES: Build → Build Solution (F7)
-```
-
-3. **Gravar SoftDevice** (primeira vez):
-```bash
-nrfjprog --family NRF52 --eraseall
-nrfjprog --family NRF52 --program s140_nrf52_7.3.0_softdevice.hex --verify
-```
-
-4. **Gravar Firmware**:
-```bash
-# Via J-Link Commander
-JLink -device NRF52840_XXAA -if SWD -speed 4000 -CommandFile flash_firmware.jlink
-
-# Ou via nrfjprog
-nrfjprog --family NRF52 --program Output/Release/Exe/ble_app_blinky_pca10056_s140.hex --verify
-nrfjprog --family NRF52 --reset
+python power_profiling/ppk2_hold_on.py --port COM8 --voltage-mv 5000 &
 ```
 
 ## 📊 Processamento de Sinal
 
 ### Pipeline de Dados
 ```
-ADS112C04 → Butterworth Filter → FIFO Buffer → BLE Notification
-  2kHz          20-500 Hz          60 samples      250 pkt/s
+ADS112C04 --DRDY#--> leitura I2C --> Butterworth --> FIFO --> notificação BLE
+ 2042 S/s            400 kHz         20-400 Hz     64 amostras   ~32 pkt/s
 ```
 
 ### Filtro Butterworth
-```c
-Type: Bandpass 4th order
-Cutoff frequencies: 20-500 Hz
-Sample rate: 2000 Hz
-Implementation: Direct Form II
-Coefficients: Pre-calculated normalized
+
+Passa-banda de 2ª ordem (4 polos / 4 zeros), 20–400 Hz. **Os coeficientes
+dependem da taxa de amostragem** e são selecionados pelo mesmo
+`ADS_TURBO_MODE` que define a taxa do ADC — taxa sem conjunto de coeficientes
+vira `#error` em tempo de compilação.
+
+| Taxa | GAIN | Coeficientes de realimentação |
+|---|---|---|
+| 2000 SPS | 5.182411747 | −0.2066719852 · 0.8192636853 · −1.9509646898 · 2.3350824021 |
+| 1000 SPS | 1.715890586 | −0.3476653949 · −0.1939361276 · 0.8157085862 · 0.6874450146 |
+
+Gerados com [mkfilter](https://github.com/brunorchaves/mkfilter_in_python):
+
+```bash
+python mkfilter.py -Bu -Bp -o 2 -f 20 400 -s 2000 -c    # 2 kSPS
+python mkfilter.py -Bu -Bp -o 2 -f 20 400 -s 1000 -c    # 1 kSPS
 ```
+
+Resposta verificada numericamente nos dois casos: cortes de −3 dB em
+exatamente 20,0 Hz e 400,0 Hz.
+
+**Sobre anti-aliasing:** o ADS112C04 é delta-sigma. O modulador roda a
+centenas de kHz e o filtro digital interno atenua de f<sub>DR</sub>/2 até
+f<sub>MOD</sub>, onde a resposta se repete. O filtro analógico da placa
+(Sallen-Key de 2ª ordem em 482 Hz) só precisa bloquear conteúdo perto de
+f<sub>MOD</sub>, onde tem ~109 dB de folga. Ele está adequado nas duas taxas
+e **não precisa ser alterado**.
 
 ### FIFO Buffer
 ```c
-Size: 60 samples (int16_t)
-Type: Circular buffer
-Overflow: Oldest data discarded
-Transmission: When full (60 samples ready)
+Size: 64 amostras (int16_t), circular
+Pacote: 60 amostras
+Overflow: dado mais antigo descartado
+Transmissão: quando o pacote fecha
 ```
 
 ## 🔬 Configurações BLE Avançadas
 
 ### RAM Allocation
 ```c
-RAM_START: 0x20002B78  // Após SoftDevice
-RAM_SIZE: 0x3D488      // 244 KB disponível
-SoftDevice RAM: ~11 KB (MTU 247)
+RAM_START: 0x20002C80   // no .emProject, não no sdk_config.h
+RAM_SIZE:  0x3D380
 ```
+
+Se a SoftDevice reclamar `Insufficient RAM allocated` no boot (visível via
+RTT), ela informa o valor exato a usar — atualize `RAM_START`/`RAM_SIZE` no
+`.emProject` e recompile. Aumentar `GAP_EVENT_LENGTH`, `ATTR_TAB_SIZE` ou a
+fila de notificações consome RAM da SoftDevice e costuma exigir esse ajuste.
 
 ### BLE Stack Config
 ```c
-NRF_SDH_BLE_GATT_MAX_MTU_SIZE: 247
-NRF_SDH_BLE_GAP_DATA_LENGTH: 251
-NRF_SDH_BLE_VS_UUID_COUNT: 2
-NRF_SDH_BLE_GATTS_ATTR_TAB_SIZE: 1408
+NRF_SDH_BLE_GATT_MAX_MTU_SIZE:      247
+NRF_SDH_BLE_GAP_DATA_LENGTH:        251   // era 27: cada notificação de
+                                          // 123 B virava ~6 PDUs de link
+NRF_SDH_BLE_GAP_EVENT_LENGTH:        24   // era 6 (7,5 ms) e limitava o
+                                          // throughput a ~1,7 pkt/evento
+NRF_SDH_BLE_GATTS_HVN_TX_QUEUE_SIZE:  6   // era 1 (default do SDK)
+NRF_SDH_BLE_VS_UUID_COUNT:           10
+NRF_SDH_BLE_GATTS_ATTR_TAB_SIZE:   1408
 ```
 
 ### Connection Parameters
 ```c
-MIN_CONN_INTERVAL: MSEC_TO_UNITS(7.5, UNIT_1_25_MS)   // 6 units
-MAX_CONN_INTERVAL: MSEC_TO_UNITS(15, UNIT_1_25_MS)    // 12 units
-SLAVE_LATENCY: 0                                       // Zero latency
-CONN_SUP_TIMEOUT: MSEC_TO_UNITS(4000, UNIT_10_MS)     // 4s timeout
+MIN_CONN_INTERVAL: MSEC_TO_UNITS(75,   UNIT_1_25_MS)   // 60 units
+MAX_CONN_INTERVAL: MSEC_TO_UNITS(100,  UNIT_1_25_MS)   // 80 units
+SLAVE_LATENCY:     0
+CONN_SUP_TIMEOUT:  MSEC_TO_UNITS(6000, UNIT_10_MS)     // 6 s
 ```
 
 ## 📝 Estrutura do Código
@@ -418,40 +516,148 @@ JLinkRTTViewer
 - Eventos de conexão/desconexão
 ```
 
-### UART Debug
-```c
-Baud rate: 115200
-Data bits: 8
-Stop bits: 1
-Parity: None
-TX: Assíncrono (non-blocking)
+### UART — desabilitada
 
-Mensagens:
-- "ADS112C04 configured"
-- "DS3502 resistance set successfully"
-- "BLE connected"
-- "Packet sent: N/M successful"
+A UART0 está **desligada** (`ENABLE_UART 0` em `main.c`) por dois motivos
+independentes:
+
+1. O TX (P1.11) **não está conectado a nada na PCB** — o firmware imprimia em
+   pino solto, gastando energia sem destino.
+2. O RX (P1.12) é o **mesmo pino do LED2**, cujo ânodo fica no trilho de 5 V
+   via 1 kΩ. Com o pino configurado como entrada de UART, corria corrente pelos
+   diodos de proteção — era a causa do brilho basal permanente do LED2.
+
+Ambos os pinos ficam agora como saída em nível alto. Para depuração use **RTT**,
+que é o backend do `NRF_LOG`. Reativar a UART é mudar `ENABLE_UART` para 1, mas
+lembre que isso reacende o LED2.
+
+### Contadores de diagnóstico
+
+Independentes do BLE e do RTT, legíveis via J-Link com
+[`power_profiling/fw_counters.py`](power_profiling/fw_counters.py):
+
+| Contador | O que indica |
+|---|---|
+| `g_init_status` | bitmask de progresso do init (twi, ads, ds3502, loop, drdy) |
+| `g_loop_count` | iterações do loop principal — prova que o `main()` está vivo |
+| `g_drdy_count` | interrupções de DRDY# = taxa real de conversão do ADC |
+| `g_adc_ok_count` | leituras bem-sucedidas — comparado com `g_drdy_count` dá a perda |
+| `g_notify_ok_count` / `g_notify_err_count` | notificações BLE enviadas e recusadas |
+| `g_block_drop_count` | blocos de 60 amostras descartados |
+| `g_last_raw` / `g_last_filtered` | última amostra, antes e depois do filtro |
+
+## 📈 Consumo e desempenho medidos
+
+Medições com **Nordic Power Profiler Kit II** (PCA63100) em source meter a
+100 kS/s, captura verificada sem perda de amostra. Relatório completo em
+**[`power_profiling/relatorio_consumo.pdf`](power_profiling/relatorio_consumo.pdf)**;
+metodologia em [`power_profiling/PLANO.md`](power_profiling/PLANO.md).
+
+### Métricas de transmissão (medidas)
+```
+Taxa de aquisição:  2042 S/s   (0% de conversões do ADC perdidas)
+Pacotes:            ~32/s de 120 B  =  ~3,8 kB/s
+Amostras entregues: ~1900 S/s  (~8% de blocos descartados pelo firmware)
+Continuidade:       0,997      (junções suaves entre pacotes consecutivos)
+Intervalo conexão:  ~93 ms negociado com Windows
 ```
 
-## 📈 Performance
+### Consumo por estado
 
-### Métricas de Transmissão
-```
-Sample Rate: 2000 Hz
-Packet Rate: 250 packets/second
-Samples/Packet: 60
-Latency: 7.5-15ms (connection interval)
-Throughput: ~30 KB/s (240 kbps)
-Packet Loss: <0.1% (com CCCD check)
+A 5,0 V, com LED e UART desligados:
+
+| Estado | Corrente média | Potência | Pico real* |
+|---|---|---|---|
+| OFF | 0,000 mA | 0,00 mW | — |
+| BOOT | 6,79 mA | 33,96 mW | 28,1 mA |
+| ADVERTISING | 6,80 mA | 34,02 mW | 28,8 mA |
+| CONNECTED (sem CCCD) | 6,83 mA | 34,16 mW | 26,3 mA |
+| STREAMING | 7,28 mA | 36,40 mW | 29,6 mA |
+
+\* Picos excluem a vizinhança das trocas de faixa de medição da PPK2, onde o
+instrumento gera artefatos — sem essa exclusão o máximo aparente chegaria a
+563 mA, fisicamente impossível nesta placa.
+
+### Efeito da tensão de alimentação e da taxa do ADC
+
+| Configuração | Corrente | Potência | Autonomia* |
+|---|---|---|---|
+| 5,0 V · 2 kSPS | 6,80 mA | 34,02 mW | 36,9 h |
+| **3,3 V · 2 kSPS** | **4,37 mA** | **14,41 mW** | **87,0 h** |
+| 3,3 V · 1 kSPS | 2,75 mA | 9,10 mW | 138,2 h |
+
+\* Bateria de 400 mAh @ 3,7 V, conversor a 85%.
+
+Tensão mínima de operação: o firmware roda até 2,0 V, mas **2,7 V é o piso com
+todos os componentes em especificação** (limite inferior do DS3502). Abaixo de
+~3,0 V a corrente para de cair — regulador do módulo em dropout.
+
+A 3,3 V a referência de 2,048 V do MAX6106 deixa de estar perto do meio do
+trilho e o pico positivo do sinal é ceifado ~16%. Correção: dividir a
+referência para ~1,65 V com dois resistores antes do buffer U2.4.
+
+### Para onde vai a corrente
+
+- **Aquisição (ADC + I²C + CPU): ~4,1 mA** — obtido comparando o transiente de
+  partida (2,69 mA antes do ADC ser configurado) com o regime (6,81 mA)
+- **Rádio BLE: 0,48 mA** — diferença entre ADVERTISING e STREAMING, com o link
+  entregando 32 pacotes/s. O rádio **não** é o gargalo
+- **LED1 + UART: 1,35 mA** — já removidos
+
+Os picos de corrente ocorrem a **~2000/s, um por conversão do ADC**, com
+largura mediana de 20 µs — são a leitura I²C, não o rádio. Cada pico move
+~0,4 µC, então ~100 µF de bulk local mantém o trilho dentro de ~5 mV e a fonte
+(supercapacitor ou PMU) passa a ver só a média. **A placa não tem nenhum
+capacitor de bulk hoje** — o maior é 220 nF.
+
+### Otimizações implementadas
+1. ✅ Aquisição governada pela interrupção de DRDY# (era sem fonte de tempo)
+2. ✅ I²C a 400 kHz (era 100 kHz, perdia 11% das conversões)
+3. ✅ Data Length Extension 251 (era 27)
+4. ✅ Fila de notificações 6 e `GAP_EVENT_LENGTH` 24
+5. ✅ LED1 e UART0 desligados
+6. ✅ Pinos configurados no início do `main()` (evita LEDs acesos no boot)
+7. ⬜ DC/DC do nRF52840 — ainda desabilitado (`POWER_CONFIG_DEFAULT_DCDCEN 0`)
+8. ⬜ `ads112c04_powerdown()` quando desconectado — existe e nunca é chamado
+9. ⬜ TWIM com EasyDMA disparado por PPI (hoje usa o driver legado `nrfx_twi`)
+
+## 🔬 Ferramental de medição
+
+[`power_profiling/`](power_profiling/) contém a bancada usada nas medições
+acima:
+
+| Script | Função |
+|---|---|
+| `run_bench.py` | Percorre 9 estados de operação num único stream contínuo da PPK2 |
+| `fw_counters.py` | Lê os contadores de diagnóstico do firmware via J-Link, sem depender do BLE |
+| `ble_client.py` | Central BLE (`bleak`) que puxa e decodifica as amostras |
+| `voltage_sweep.py` | Mede corrente e potência a cada tensão de alimentação |
+| `analyze.py` / `figures.py` / `report_pdf.py` | Estatísticas, figuras e o relatório em PDF |
+| `emg_validate.py` | Valida que o stream é sinal real (taxa, continuidade, espectro) |
+
+```bash
+pip install -r power_profiling/requirements.txt
+python power_profiling/ppk2_check.py --port COM8          # teste de comunicação
+python power_profiling/fw_counters.py --watch 10          # taxa de aquisição real
+python power_profiling/run_bench.py --port COM8 --voltage-mv 3300
 ```
 
-### Otimizações Implementadas
-1. ✅ MTU negotiation para pacotes maiores
-2. ✅ Connection interval otimizado (7.5ms)
-3. ✅ BLE 2M PHY para dobrar throughput
-4. ✅ CCCD verification antes de notificar
-5. ✅ HVN_TX_COMPLETE observer para flow control
-6. ✅ Buffer circular para streaming contínuo
+## ⚠️ Limitações conhecidas
+
+- **A escrita BLE de ganho é no-op.** `on_write` em `ble_emg_service.c` valida e
+  loga o valor recebido mas nunca atribui `gain_level`, então o DS3502 fica no
+  valor de boot. O caminho I²C funciona; falta o `gain_level = new_gain`.
+- **~8% dos blocos de 60 amostras são descartados** quando a fila de
+  notificações da SoftDevice enche. O host não consegue detectar isso
+  diretamente porque o pacote não tem número de sequência — a detecção atual é
+  por continuidade do sinal (o filtro IIR mantém estado entre pacotes).
+- **A UART não é um caminho de dados.** Está desabilitada, e mesmo habilitada
+  o TX (P1.11) não está conectado na PCB. BLE é o único caminho.
+- **`esp_dongle_ble/` está obsoleto** — nome e UUIDs do protótipo Arduino
+  antigo, e decodifica 1 amostra em vez de 60.
+- **Não há isolamento de estados por subsistema.** O firmware nunca para a
+  aquisição, então não existe um estado "só rádio" ou "só ADC" — o que o
+  protocolo experimental pede para atribuir consumo por subsistema.
 
 ## 🔗 Integração com App Mobile
 
@@ -483,35 +689,69 @@ await device.writeCharacteristicWithResponseForService(
 
 ## 🛠️ Troubleshooting
 
-### Dispositivo não conecta
-- ✅ Verificar se SoftDevice foi gravado
-- ✅ Confirmar RAM allocation correta
-- ✅ Resetar dispositivo após flash
-- ✅ Verificar logs RTT para erros
+### O primeiro diagnóstico: leia os contadores do firmware
 
-### Dados cortados/incompletos
-- ✅ MTU deve ser negociado (247 bytes)
-- ✅ CCCD deve estar habilitado
-- ✅ Connection interval muito alto
-- ✅ Verificar tx_in_progress flag
+Antes de suspeitar do BLE, confirme se o loop principal está vivo. A pilha BLE
+responde por interrupção da SoftDevice **mesmo com o `main()` travado**, então
+"conecta mas não chega dado" e "firmware travado" são indistinguíveis de fora:
 
-### Alta taxa de erro
-- ✅ Distância >5m do dispositivo
-- ✅ Interferência BLE (WiFi 2.4GHz)
-- ✅ Múltiplas conexões simultâneas
-- ✅ Latência de processamento no app
+```bash
+python power_profiling/fw_counters.py --watch 10
+```
+
+Esperado com a placa saudável:
+```
+g_init_status = 0x3F  [twi_ok, ads_init_ok, ads_config_ok, ds3502_ok,
+                       main_loop_entered, drdy_irq_ok]
+taxa de amostragem efetiva: ~2040 S/s
+conversoes do ADC nao lidas: 0 (0.0% perdidas)
+```
+
+- `g_init_status` sem o bit `drdy_irq_ok` → a interrupção de amostragem não
+  subiu, e o loop cai no fallback de leitura por iteração
+- Bit `0x80` (`ADC_INIT_FAILED`) → o ADS112C04 não respondeu no I²C
+- `taxa de amostragem` perto de 1,0 S/s → nada está governando a amostragem
+- `conversoes nao lidas` alta → o I²C não acompanha a taxa do ADC
+
+### J-Link não conecta ao alvo
+- ✅ **A placa está alimentada?** Sem bateria, ligue a PPK2 primeiro. Erros de
+  `RESET (pin 15) high` e `Failed to power up DAP` costumam ser só falta de
+  alimentação, não defeito no cabo ou proteção de readback
+- ✅ Driver USB do probe instalado (`USBDriver/InstDrivers.exe`, precisa de admin)
+- ✅ Só depois disso considerar `erase.sh` + `flash_all.sh`
+
+### Dispositivo não anuncia
+- ✅ Ver RTT no boot: `Insufficient RAM allocated` indica o valor exato a pôr em
+  `RAM_START`/`RAM_SIZE` no `.emProject`
+- ✅ Se o rádio Bluetooth do PC desligou sozinho, `ble_client.py` religa
+  automaticamente; fora dele, verifique o toggle do Windows
+
+### Dados cortados ou ausentes
+- ✅ MTU precisa negociar ≥ 123 B para o payload de 120 B. `ble_client.read_mtu()`
+  aborta o run se ficar abaixo
+- ✅ Pacotes de **2 bytes** em vez de 120 indicam `is_var_len` não setado na
+  característica — sem isso o atributo GATT tem tamanho fixo em `init_len` e a
+  SoftDevice trunca toda notificação
+- ✅ CCCD habilitado (o firmware relê a CCCD a cada pacote)
+- ✅ ~8% de blocos descartados é o comportamento atual esperado, não defeito
 
 ### DS3502 não responde
-- ✅ Verificar endereço I2C (0x28)
-- ✅ Pull-ups em SDA/SCL
-- ✅ Alimentação 3.3V estável
-- ✅ Logs RTT mostram falha
+- ✅ Endereço I²C 0x28, pull-ups de 4k7 presentes
+- ✅ Alimentação ≥ 2,7 V (limite inferior do componente)
+- ✅ **Se o ganho não muda via BLE, não é o DS3502**: a escrita BLE é no-op
+  (ver [Limitações conhecidas](#-limitações-conhecidas))
 
 ## 📚 Referências
 
-### Artigo e esquemáticos
-- [A Low-Power Bluetooth LE Surface EMG Sensor](663744.pdf) - Artigo do projeto
-- [Esquemático EMG v2.0](Schematic_EMG-schematic-v2.0_2025-02-19.pdf) - Circuito do sensor
+### Artigo, protocolo e esquemáticos
+- [A Low-Power Bluetooth LE Surface EMG Sensor](663744.pdf) — artigo do projeto
+- [Esquemático EMG v2.0](Schematic_EMG-schematic-v2.0_2025-02-19.pdf) — circuito do sensor
+- [Protocolo Experimental sEMG + Supercapacitor](Protocolo_Experimental_sEMG_Supercapacitor.pdf) — 8 ensaios de caracterização e validação
+
+### Medições de consumo
+- [Relatório de consumo (PDF)](power_profiling/relatorio_consumo.pdf) — caracterização com PPK2, 9 páginas
+- [Metodologia e plano](power_profiling/PLANO.md) — decisões de bancada e histórico de diagnóstico
+- [Guia da PPK2](power_profiling/README.md) — fiação, modos source vs ampere
 
 ### Datasheets e documentação
 - [nRF52840 Product Specification](https://infocenter.nordicsemi.com/pdf/nRF52840_PS_v1.8.pdf)
