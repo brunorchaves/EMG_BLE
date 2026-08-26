@@ -766,6 +766,28 @@ void check_ads112c04(void) {
 
 // === Main ===
 int main(void) {
+    // PRIMEIRA coisa do main, antes de qualquer outra inicializacao.
+    //
+    // No reset os GPIOs do nRF52840 nascem como ENTRADA (alta impedancia). Os
+    // dois LEDs desta placa tem o anodo no trilho de 5 V via 1 kOhm e o catodo
+    // num pino do modulo, entao com o pino em alta impedancia eles conduzem
+    // pelos diodos de protecao do pino e ACENDEM. Antes desta mudanca os pinos
+    // so eram configurados depois de log_init + timers + power mgmt + toda a
+    // pilha BLE (ble_stack_init, gap, gatt, services, advertising), o que
+    // deixava os dois LEDs acesos durante dezenas a centenas de ms a cada boot
+    // - visivel a olho nu como um flash em cada power-cycle, e corrente extra
+    // exatamente no transiente de partida, que e o que mais importa para
+    // alimentacao por supercapacitor.
+    //
+    // Configurar os tres pinos como saida em nivel alto aqui reduz essa janela
+    // a microssegundos.
+    nrf_gpio_cfg_output(LED_PIN);      // LED1
+    nrf_gpio_pin_write(LED_PIN, 1);
+    nrf_gpio_cfg_output(UART_RX_PIN);  // LED2 compartilha este pino
+    nrf_gpio_pin_write(UART_RX_PIN, 1);
+    nrf_gpio_cfg_output(UART_TX_PIN);
+    nrf_gpio_pin_write(UART_TX_PIN, 1);
+
     // Initialize.
     log_init();
     NRF_LOG_INFO("========================================");
