@@ -22,3 +22,12 @@ device behavior from RTT/UART logs afterward.
 Two other firmware trees in this repo (`esp_dongle_ble/` — ESP-IDF for the
 ESP32-C3 BLE dongle, `emgBLE/` — an Arduino sketch) use their own native
 toolchains (`idf.py`, Arduino) and are out of scope for the SEGGER-CLI rule.
+
+## Power/current measurement: use the PPK2 (PCA63100)
+
+Redoing the energy-consumption study (README.md, Tabela 2) or any other
+current/power measurement on the EMG_BLE board is done with the **Nordic
+Power Profiler Kit II** (board PCA63100), not a shunt + oscilloscope. Use
+the `ppk2-power-profiling` skill — it documents the wiring (source vs.
+ampere meter mode, where to tap the battery/boost/5V rail) and wraps the
+capture in ready-made scripts under `power_profiling/`.

@@ -10,7 +10,7 @@ require_config "$CONFIG"
 EMBUILD="$(resolve_embuild)"
 
 echo "==> Building '$CONFIG' with emBuild.exe (SEGGER Embedded Studio CLI)"
-"$EMBUILD" -config "$CONFIG" -rebuild "$SES_PROJECT_FILE"
+"$EMBUILD" -config "$CONFIG" -rebuild "$(to_win_path "$SES_PROJECT_FILE")"
 
 OUT_HEX="$(app_hex_path "$CONFIG")"
 if [[ -f "$OUT_HEX" ]]; then

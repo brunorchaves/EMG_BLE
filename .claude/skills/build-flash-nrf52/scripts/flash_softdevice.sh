@@ -13,11 +13,13 @@ JLINK="$(resolve_jlink)"
   exit 1
 }
 
+SOFTDEVICE_HEX_WIN="$(to_win_path "$SOFTDEVICE_HEX")"
+
 echo "==> Flashing SoftDevice ($SOFTDEVICE_HEX) via JLink.exe"
 run_jlink_commands "$JLINK" "$(cat <<EOF
 r
 h
-loadfile "$SOFTDEVICE_HEX"
+loadfile "$SOFTDEVICE_HEX_WIN"
 r
 g
 q

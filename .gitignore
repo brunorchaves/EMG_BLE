@@ -7,6 +7,12 @@ blinky/
 # SES (Segger Embedded Studio) — arquivos gerados pelo compilador
 **/ses/Output/
 
+# Bancada de caracterizacao de energia (power_profiling/)
+# Capturas brutas da PPK2: ~400 kB/s = ~24 MB por minuto de run
+power_profiling/runs/
+__pycache__/
+*.pyc
+
 # Arquivos temporários de editor e SO
 .DS_Store
 Thumbs.db

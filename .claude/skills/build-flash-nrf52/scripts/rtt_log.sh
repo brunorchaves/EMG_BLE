@@ -10,10 +10,11 @@ source "$SCRIPT_DIR/common.sh"
 RTT_LOGGER="$(resolve_rtt_logger)"
 OUT_FILE="${1:-rtt_log.txt}"
 DURATION="${2:-}"
+OUT_FILE_WIN="$(to_win_path "$OUT_FILE")"
 
 echo "==> Capturing RTT log to $OUT_FILE (Ctrl+C to stop)"
 if [[ -n "$DURATION" ]]; then
-  timeout "$DURATION" "$RTT_LOGGER" -Device "$DEVICE" -If "$JLINK_IF" -Speed "$JLINK_SPEED" -RTTChannel 0 "$OUT_FILE" || true
+  timeout "$DURATION" "$RTT_LOGGER" -Device "$DEVICE" -If "$JLINK_IF" -Speed "$JLINK_SPEED" -RTTChannel 0 "$OUT_FILE_WIN" || true
 else
-  "$RTT_LOGGER" -Device "$DEVICE" -If "$JLINK_IF" -Speed "$JLINK_SPEED" -RTTChannel 0 "$OUT_FILE"
+  "$RTT_LOGGER" -Device "$DEVICE" -If "$JLINK_IF" -Speed "$JLINK_SPEED" -RTTChannel 0 "$OUT_FILE_WIN"
 fi

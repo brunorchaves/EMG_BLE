@@ -24,6 +24,19 @@ app_hex_path() {
   echo "$SES_PROJECT_DIR/Output/$1/Exe/$APP_HEX_NAME"
 }
 
+to_win_path() {
+  # Convert a git-bash/MSYS POSIX path (e.g. /c/Users/...) to a native Windows
+  # path (C:\Users\...). emBuild.exe, JLink.exe and JLinkRTTLogger.exe are
+  # native Windows binaries and cannot resolve /c/... paths -- every path
+  # handed to them (project file, hex file, output file) MUST go through
+  # this first, or they fail with "Failed to open file" / similar.
+  if command -v cygpath >/dev/null 2>&1; then
+    cygpath -w "$1"
+  else
+    echo "$1"
+  fi
+}
+
 require_config() {
   case "${1:-}" in
     Debug|Release) ;;
@@ -39,6 +52,11 @@ resolve_embuild() {
   )
   local c
   for c in "${candidates[@]}"; do
+    [[ -f "$c" ]] && { echo "$c"; return 0; }
+  done
+  # The version in the folder name varies with whatever was installed
+  # (8.24, 8.30a, ...) -- glob instead of pinning one version.
+  for c in "/c/Program Files/SEGGER/SEGGER Embedded Studio "*"/bin/emBuild.exe" "/c/Program Files (x86)/SEGGER/SEGGER Embedded Studio "*"/bin/emBuild.exe"; do
     [[ -f "$c" ]] && { echo "$c"; return 0; }
   done
   if command -v emBuild.exe >/dev/null 2>&1; then
@@ -60,6 +78,12 @@ resolve_jlink() {
   for c in "${candidates[@]}"; do
     [[ -f "$c" ]] && { echo "$c"; return 0; }
   done
+  # The Windows installer defaults to a version-suffixed folder
+  # (SEGGER/JLink_V970, JLink_V978, ...) instead of plain SEGGER/JLink unless
+  # a prior unversioned install already exists. Glob for that too.
+  for c in "/c/Program Files/SEGGER/JLink_V"*"/JLink.exe" "/c/Program Files (x86)/SEGGER/JLink_V"*"/JLink.exe"; do
+    [[ -f "$c" ]] && { echo "$c"; return 0; }
+  done
   if command -v JLink.exe >/dev/null 2>&1; then
     command -v JLink.exe
     return 0
@@ -78,6 +102,9 @@ resolve_rtt_logger() {
   )
   local c
   for c in "${candidates[@]}"; do
+    [[ -f "$c" ]] && { echo "$c"; return 0; }
+  done
+  for c in "/c/Program Files/SEGGER/JLink_V"*"/JLinkRTTLogger.exe" "/c/Program Files (x86)/SEGGER/JLink_V"*"/JLinkRTTLogger.exe"; do
     [[ -f "$c" ]] && { echo "$c"; return 0; }
   done
   if command -v JLinkRTTLogger.exe >/dev/null 2>&1; then

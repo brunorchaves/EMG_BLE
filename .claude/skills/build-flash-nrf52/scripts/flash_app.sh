@@ -16,11 +16,13 @@ APP_HEX="$(app_hex_path "$CONFIG")"
   exit 1
 }
 
+APP_HEX_WIN="$(to_win_path "$APP_HEX")"
+
 echo "==> Flashing application ($CONFIG) via JLink.exe"
 run_jlink_commands "$JLINK" "$(cat <<EOF
 r
 h
-loadfile "$APP_HEX"
+loadfile "$APP_HEX_WIN"
 r
 g
 q

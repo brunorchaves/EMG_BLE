@@ -1,0 +1,16 @@
+# Bancada de caracterizacao de energia (power_profiling/) - deliberadamente
+# numpy-only para o bench em si (ver dsp.py e risco R9 do plano). scipy e
+# pandas so sao necessarios pelos scripts LEGADOS de analise de sinal
+# (data/processdata/processdata.py, processData/featuresPlot.py), que nao
+# fazem parte deste bench e ficam intocados.
+
+numpy
+matplotlib
+pyserial
+bleak
+ppk2-api
+psutil
+
+# --- scripts legados de analise de sinal (fora do bench de energia) ---
+# scipy
+# pandas
