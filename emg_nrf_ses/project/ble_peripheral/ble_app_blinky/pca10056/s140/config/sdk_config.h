@@ -11429,8 +11429,14 @@
 
 // <i> Requested BLE GAP data length to be negotiated.
 
+// Data Length Extension: estava em 27, o minimo. Com MTU 247 negociado e
+// notificacoes de 123 bytes (120 de payload + 3 de header ATT), cada
+// notificacao era fragmentada em ~6 PDUs de link layer, multiplicando o tempo
+// de radio no ar por notificacao. Com 251, cada notificacao cabe em UM PDU.
+// Isso e ganho duplo: mais throughput (menos blocos descartados) e menos
+// energia por pacote.
 #ifndef NRF_SDH_BLE_GAP_DATA_LENGTH
-#define NRF_SDH_BLE_GAP_DATA_LENGTH 27
+#define NRF_SDH_BLE_GAP_DATA_LENGTH 251
 #endif
 
 // <o> NRF_SDH_BLE_PERIPHERAL_LINK_COUNT - Maximum number of peripheral links. 
@@ -11453,8 +11459,15 @@
 // <o> NRF_SDH_BLE_GAP_EVENT_LENGTH - GAP event length. 
 // <i> The time set aside for this connection on every connection interval in 1.25 ms units.
 
+// 6 unidades (7.5 ms) era o gargalo de entrega: mesmo com a fila de
+// notificacoes aprofundada e DLE ligado, so cabiam ~1.7 notificacoes por
+// evento de conexao, entregando 19/s de 34.5/s produzidos (~45% descartado).
+// 24 unidades (30 ms) dao espaco para drenar varias notificacoes por evento.
+// ATENCAO para o estudo de energia: isso aumenta o tempo maximo de radio
+// ligado por evento de conexao, entao e um trade-off consciente
+// throughput-vs-consumo, e nao um ajuste "de graca".
 #ifndef NRF_SDH_BLE_GAP_EVENT_LENGTH
-#define NRF_SDH_BLE_GAP_EVENT_LENGTH 6
+#define NRF_SDH_BLE_GAP_EVENT_LENGTH 24
 #endif
 
 // <o> NRF_SDH_BLE_GATT_MAX_MTU_SIZE - Static maximum MTU size.
@@ -11473,10 +11486,20 @@
 #endif
 
 // <q> NRF_SDH_BLE_SERVICE_CHANGED  - Include the Service Changed characteristic in the Attribute Table.
- 
+
 
 #ifndef NRF_SDH_BLE_SERVICE_CHANGED
 #define NRF_SDH_BLE_SERVICE_CHANGED 0
+#endif
+
+// Profundidade da fila de notificacoes (HVN) da SoftDevice. O default do SDK
+// e 1, o que permitia no maximo UMA notificacao por evento de conexao - com o
+// intervalo de conexao real negociado com o Windows (~187 ms medido), isso
+// limitava a ~5 notificacoes/s, enquanto a aquisicao a ~1772 S/s produz ~29
+// blocos/s. Resultado: ~78% dos blocos eram descartados. Com a fila mais
+// profunda, varias notificacoes podem ser enfileiradas por evento de conexao.
+#ifndef NRF_SDH_BLE_GATTS_HVN_TX_QUEUE_SIZE
+#define NRF_SDH_BLE_GATTS_HVN_TX_QUEUE_SIZE 6
 #endif
 
 // </h> 

@@ -75,8 +75,23 @@ uint32_t ble_emg_service_init(ble_emg_service_t * p_emg)
     memset(&add_char_params, 0, sizeof(add_char_params));
     add_char_params.uuid              = EMG_CHAR_UUID;
     add_char_params.uuid_type         = p_emg->uuid_type;
-    add_char_params.max_len           = EMG_MAX_PAYLOAD;  // 40 bytes para pacotes
+    add_char_params.max_len           = EMG_MAX_PAYLOAD;  // 120 bytes (60 amostras int16)
     add_char_params.init_len          = sizeof(uint16_t);
+    // BUG FIX: sem is_var_len=1 o atributo GATT fica com tamanho FIXO em
+    // init_len (ble_srv_common.c:146, attr_md.vlen = is_var_len ? 1 : 0) e a
+    // SoftDevice trunca TODA notificacao para 2 bytes (1 amostra), nunca os
+    // 120 pretendidos. Confirmado na pratica via bleak: 726 pacotes de
+    // 2 bytes.
+    //
+    // Nota historica: uma primeira tentativa deste fix pareceu "travar" o
+    // dispositivo e foi revertida. O diagnostico depois mostrou que aquilo
+    // eram DOIS outros problemas, nao este: (1) o overflow de packet_index
+    // em main.c corrompia .bss no estado conectado-sem-CCCD, e (2) a
+    // aquisicao rodava a 1 amostra/s (nao havia timer nenhum governando a
+    // amostragem), entao encher um bloco de 60 amostras levava 60 s e os
+    // testes de 8 s naturalmente viam "0 pacotes". Com os dois corrigidos,
+    // este fix e seguro.
+    add_char_params.is_var_len        = 1;
     add_char_params.char_props.notify = 1;
     add_char_params.cccd_write_access = SEC_OPEN;
 
@@ -146,14 +161,16 @@ uint32_t ble_emg_service_notify_packet(ble_emg_service_t * p_emg, uint16_t conn_
         return NRF_ERROR_INVALID_STATE;
     }
 
-    if (p_emg->tx_in_progress) {
-        // Log apenas em caso de busy recorrente (debug)
-        static uint32_t busy_count = 0;
-        if (busy_count++ % 100 == 0) {
-            NRF_LOG_WARNING("TX busy: %d times", busy_count);
-        }
-        return NRF_ERROR_BUSY;
-    }
+    // Removido o gate de "uma notificacao pendente por vez" (tx_in_progress):
+    // ele limitava o throughput a UMA notificacao por evento de conexao,
+    // independente da profundidade real da fila da SoftDevice. Com o intervalo
+    // de conexao real negociado com o Windows (~187 ms medido) isso dava ~5
+    // notificacoes/s contra ~29 blocos/s produzidos pela aquisicao -> ~78% de
+    // descarte. O controle de fluxo correto e o proprio retorno de
+    // sd_ble_gatts_hvx (NRF_ERROR_RESOURCES quando a fila enche), que o
+    // chamador ja trata contando e descartando o bloco.
+    // tx_in_progress continua sendo mantido apenas como informacao de
+    // diagnostico (setado aqui, limpo no evento HVN_TX_COMPLETE).
 
     if (num_samples == 0 || p_data == NULL) {
         NRF_LOG_ERROR("Notify packet failed: invalid parameters");

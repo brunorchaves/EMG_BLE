@@ -11,6 +11,8 @@
 #include "nrfx_uart.h"
 #include "nrfx_twi.h"
 #include "nrf_gpio.h"
+#include "nrf_delay.h"
+#include "nrfx_gpiote.h"
 #include "ADS112C04.h"
 
 #include "nrf_sdh.h"
@@ -59,6 +61,10 @@
 // === Hardware Configuration ===
 #define LED_PIN           (32 + 13)
 #define RST_PIN           28
+// DRDY# do ADS112C04 (pad D3 do modulo, com pull-up externo de 4k7). Estava
+// roteado na PCB mas NUNCA era lido pelo firmware - a aquisicao nao tinha
+// nenhuma fonte de tempo. Agora e a interrupcao que governa a amostragem.
+#define DRDY_PIN          29
 #define UART_TX_PIN       (32 + 11)
 #define UART_RX_PIN       (32 + 12)
 #define I2C_SDA_PIN       4
@@ -329,7 +335,11 @@ static void ble_evt_handler(ble_evt_t const * p_ble_evt, void * p_context)
 
             m_conn_handle = BLE_CONN_HANDLE_INVALID;
             m_emg_service.conn_handle = BLE_CONN_HANDLE_INVALID;
-            APP_ERROR_CHECK(err_code);
+            // BUG FIX: aqui havia um APP_ERROR_CHECK(err_code) com err_code
+            // NAO INICIALIZADO neste caminho (declarado no topo do handler e
+            // nunca atribuido no caso DISCONNECTED). APP_ERROR_CHECK num valor
+            // de lixo dispara APP_ERROR_HANDLER -> reset, de forma aleatoria,
+            // exatamente na transicao CONNECTED->IDLE que precisamos medir.
             advertising_start();
             break;
 
@@ -474,6 +484,32 @@ static void idle_state_handle(void)
 #define RESISTANCE_SETTING     DEFAULT_RESITANCE
 volatile uint8_t gain_level = 10;
 
+// === Contadores de diagnostico ===
+// Lidos via J-Link (mem32 no endereco do simbolo, ver o .map) para validar que
+// o loop principal e a aquisicao do ADC estao de fato rodando, INDEPENDENTE do
+// caminho BLE. Foram adicionados porque um travamento intermitente do loop
+// principal era indistinguivel de "BLE sem dados": a pilha BLE responde por
+// interrupcao da SoftDevice (conecta, negocia MTU, processa CCCD) mesmo com o
+// main() parado, entao nao havia como diferenciar os dois casos de fora.
+// Ler g_adc_ok_count duas vezes com um intervalo tambem da a taxa de
+// amostragem EFETIVA real (que e ditada pelo tempo do I2C bloqueante, nao por
+// clock do ADC - ver PLANO.md).
+volatile uint32_t g_loop_count       = 0;
+volatile uint32_t g_adc_ok_count     = 0;
+volatile uint32_t g_adc_fail_count   = 0;
+volatile uint32_t g_notify_ok_count  = 0;
+volatile uint32_t g_notify_err_count = 0;
+volatile uint32_t g_block_drop_count = 0;  // blocos de 60 amostras descartados
+volatile uint32_t g_drdy_count       = 0;  // interrupcoes de DRDY# do ADC
+volatile int16_t  g_last_raw         = 0;
+volatile int16_t  g_last_filtered    = 0;
+// bitmask de progresso do init: 1=twi, 2=ads_init, 4=ads_cfg, 8=ds3502,
+// 16=entrou no loop principal, 32=DRDY configurado, 128=falha de init do ADC
+volatile uint32_t g_init_status      = 0;
+
+// Sinalizado pela interrupcao de DRDY#: "o ADC tem conversao nova pronta".
+volatile bool g_drdy_flag = false;
+
 bool ds3502_set_resistance(nrfx_twi_t *twi, uint8_t value) {
     if (value > 0x7F) value = 0x7F;
 
@@ -586,7 +622,15 @@ void twi_init(void) {
     nrfx_twi_config_t config = {
         .scl = I2C_SCL_PIN,
         .sda = I2C_SDA_PIN,
-        .frequency = NRF_TWI_FREQ_100K,
+        // 100K -> 400K: cada leitura do ADC sao duas transacoes I2C
+        // BLOQUEANTES (o driver foi inicializado sem handler, entao a CPU faz
+        // busy-wait ate terminar). A 100 kHz isso gastava ~0,5 ms de CPU por
+        // amostra, e a 2000 SPS (periodo de 500 us) o loop nao conseguia
+        // acompanhar: ~11% das conversoes do ADC nunca eram lidas. A 400 kHz o
+        // tempo de barramento cai ~4x. Ganho duplo: menos amostra perdida e
+        // menos tempo de CPU acordada (que e o maior consumidor deste
+        // firmware, ver PLANO.md). O ADS112C04 suporta I2C fast mode (400 kHz).
+        .frequency = NRF_TWI_FREQ_400K,
         .interrupt_priority = NRFX_TWI_DEFAULT_CONFIG_IRQ_PRIORITY,
         .hold_bus_uninit = false
     };
@@ -602,9 +646,57 @@ void led_init(void) {
     nrf_gpio_pin_write(LED_PIN, 1);
 }
 
+// Handler da interrupcao de DRDY# do ADC. Roda em contexto de interrupcao -
+// so sinaliza; a leitura I2C (que e bloqueante) fica no loop principal.
+static void drdy_handler(nrfx_gpiote_pin_t pin, nrf_gpiote_polarity_t action)
+{
+    (void)pin;
+    (void)action;
+    g_drdy_count++;
+    g_drdy_flag = true;
+}
+
 void gpio_init(void) {
     nrf_gpio_cfg_output(RST_PIN);
     nrf_gpio_pin_write(RST_PIN, 1);
+
+    // === Aquisicao governada pelo ADC (era o problema central) ===
+    // O firmware original nao tinha NENHUMA fonte de tempo para a
+    // amostragem: o loop principal chamava ads112c04_read_data() e depois
+    // sd_app_evt_wait(), que dorme ate o proximo evento da aplicacao. Sem
+    // conexao BLE, o unico evento recorrente era o timer do LED de 1 Hz ->
+    // o ADC era lido 1 vez por segundo (medido: g_loop_count +1.0/s), nao
+    // os 2 kS/s que o artigo afirma. A taxa era puramente acidental.
+    // Agora o DRDY# do ADS112C04 (ativo em nivel baixo, uma borda por
+    // conversao concluida em modo continuo) gera a interrupcao que tanto
+    // acorda o sd_app_evt_wait() quanto marca "tem amostra nova" - a
+    // amostragem passa a ser exatamente a taxa de conversao do ADC, sem
+    // jitter, sem leitura duplicada e sem amostra perdida.
+    // nrfx_gpiote_init() nesta versao do nrfx nao recebe argumentos - a
+    // prioridade de interrupcao vem de NRFX_GPIOTE_CONFIG_IRQ_PRIORITY no
+    // sdk_config.h (valor 6, compativel com a SoftDevice).
+    if (!nrfx_gpiote_is_init()) {
+        nrfx_err_t err = nrfx_gpiote_init();
+        if (err != NRFX_SUCCESS && err != NRFX_ERROR_INVALID_STATE) {
+            NRF_LOG_ERROR("nrfx_gpiote_init falhou: 0x%08x", err);
+            return;
+        }
+    }
+
+    // HITOLO = borda de descida. Pull-up interno desnecessario (a PCB tem
+    // 4k7 externo em DRDY), mas deixamos NOPULL explicito para nao lutar
+    // com o pull-up externo.
+    nrfx_gpiote_in_config_t drdy_cfg = NRFX_GPIOTE_CONFIG_IN_SENSE_HITOLO(true);
+    drdy_cfg.pull = NRF_GPIO_PIN_NOPULL;
+
+    nrfx_err_t err = nrfx_gpiote_in_init(DRDY_PIN, &drdy_cfg, drdy_handler);
+    if (err != NRFX_SUCCESS) {
+        NRF_LOG_ERROR("nrfx_gpiote_in_init(DRDY) falhou: 0x%08x", err);
+        return;
+    }
+    nrfx_gpiote_in_event_enable(DRDY_PIN, true);
+    g_init_status |= 32u;
+    NRF_LOG_INFO("DRDY (P0.%d) configurado como interrupcao de amostragem", DRDY_PIN);
 }
 
 // === I2C Scan ===
@@ -665,30 +757,65 @@ int main(void) {
     twi_init();
     uart_print_async("TWI initialized.\r\n");
     NRF_LOG_INFO("TWI/I2C initialized");
+    g_init_status |= 1u;
 
     // i2c_scan() e check_ads112c04() removidos do loop de produção
 
+    // BUG FIX: os dois `while (1);` que ficavam aqui transformavam qualquer
+    // falha de I2C na inicializacao do ADC num travamento silencioso e
+    // indistinguivel de outros problemas - a CPU girava a 64 MHz, o radio
+    // continuava anunciando (a SoftDevice roda por interrupcao) e nao havia
+    // nenhuma forma de descobrir isso de fora sem halt+registradores no
+    // J-Link. Agora: tenta algumas vezes, registra o resultado em
+    // g_init_status e SEGUE - assim o dispositivo continua diagnosticavel
+    // (BLE de pe, contadores legiveis) em vez de virar um tijolo.
     uart_print_async("Initializing ADS112C04...\r\n");
     NRF_LOG_INFO("Configuring ADS112C04 ADC...");
-    if (!ads112c04_init(&m_twi)) {
-        uart_print_async("Failed to reset ADS112C04.\r\n");
-        NRF_LOG_ERROR("ADS112C04 initialization FAILED!");
-        while (1);
-    }
-    uart_print_async("ADS112C04 reset successful.\r\n");
-    NRF_LOG_INFO("ADS112C04 configured successfully");
 
-    uart_print_async("Configuring ADS112C04 raw mode...\r\n");
-    if (!ads112c04_configure_raw_mode(&m_twi)) {
-        uart_print_async("Failed to configure ADS112C04.\r\n");
-        NRF_LOG_ERROR("ADS112C04 raw mode configuration FAILED!");
-        while (1);
+    bool ads_ok = false;
+    for (int attempt = 0; attempt < 3 && !ads_ok; attempt++) {
+        if (ads112c04_init(&m_twi)) {
+            ads_ok = true;
+        } else {
+            NRF_LOG_WARNING("ADS112C04 init falhou (tentativa %d/3)", attempt + 1);
+            nrf_delay_ms(20);
+        }
     }
-    uart_print_async("ADS112C04 configured.\r\n");
-    NRF_LOG_INFO("ADS112C04 in raw mode - ready for sampling");
+    if (ads_ok) {
+        g_init_status |= 2u;
+        uart_print_async("ADS112C04 reset successful.\r\n");
+        NRF_LOG_INFO("ADS112C04 configured successfully");
+    } else {
+        g_init_status |= 128u;
+        uart_print_async("Failed to reset ADS112C04.\r\n");
+        NRF_LOG_ERROR("ADS112C04 initialization FAILED apos 3 tentativas");
+    }
+
+    if (ads_ok) {
+        uart_print_async("Configuring ADS112C04 raw mode...\r\n");
+        bool cfg_ok = false;
+        for (int attempt = 0; attempt < 3 && !cfg_ok; attempt++) {
+            if (ads112c04_configure_raw_mode(&m_twi)) {
+                cfg_ok = true;
+            } else {
+                NRF_LOG_WARNING("ADS112C04 config falhou (tentativa %d/3)", attempt + 1);
+                nrf_delay_ms(20);
+            }
+        }
+        if (cfg_ok) {
+            g_init_status |= 4u;
+            uart_print_async("ADS112C04 configured.\r\n");
+            NRF_LOG_INFO("ADS112C04 in raw mode - ready for sampling");
+        } else {
+            g_init_status |= 128u;
+            uart_print_async("Failed to configure ADS112C04.\r\n");
+            NRF_LOG_ERROR("ADS112C04 raw mode config FAILED apos 3 tentativas");
+        }
+    }
 
     // Configura resistência do DS3502
     if (ds3502_set_resistance(&m_twi, RESISTANCE_SETTING)) {
+        g_init_status |= 8u;
         uart_print_async("DS3502 resistance set successfully.\r\n");
         NRF_LOG_INFO("DS3502 initialized with resistance setting: 0x%02X", RESISTANCE_SETTING);
     } else {
@@ -711,8 +838,12 @@ int main(void) {
     NRF_LOG_INFO("Sampling rate: 1000 SPS | Packet: %d samples | BLE interval: 75-100ms", EMG_PACKET_SIZE);
     NRF_LOG_INFO("========================================");
 
+    g_init_status |= 16u;
+
     while (1)
     {
+        g_loop_count++;
+
         // Atualiza resistência do DS3502 se gain_level mudou
         static uint8_t last_gain_level = 0xFF;
         if (gain_level != last_gain_level && gain_level >= 1 && gain_level <= 10)
@@ -724,10 +855,28 @@ int main(void) {
             }
         }
 
-        if (ads112c04_read_data(&m_twi, &raw_data))
+        // Le o ADC apenas quando o DRDY# sinalizou conversao nova. Se o DRDY
+        // nao estiver configurado (falha no gpio_init), cai no comportamento
+        // antigo de ler a cada iteracao, para nao perder a capacidade de
+        // diagnostico.
+        bool drdy_ready = g_drdy_flag;
+        if (drdy_ready) {
+            g_drdy_flag = false;
+        }
+        if (drdy_ready || !(g_init_status & 32u))
         {
-            float filtered = butterworth_filter((float)raw_data);
-            fifo_push((int16_t)(filtered));
+            if (ads112c04_read_data(&m_twi, &raw_data))
+            {
+                g_adc_ok_count++;
+                g_last_raw = raw_data;
+                float filtered = butterworth_filter((float)raw_data);
+                g_last_filtered = (int16_t)filtered;
+                fifo_push((int16_t)(filtered));
+            }
+            else
+            {
+                g_adc_fail_count++;
+            }
         }
 
         if (fifo_pop(&out_sample)) {
@@ -740,27 +889,46 @@ int main(void) {
             }
 
             if (m_conn_handle != BLE_CONN_HANDLE_INVALID) {
-                ble_packet_buffer[packet_index++] = out_sample;
+                // BUG FIX (corrupcao de memoria): o codigo original fazia
+                // `ble_packet_buffer[packet_index++] = out_sample;` sem
+                // verificacao de limite, e so zerava packet_index quando o
+                // envio retornava SUCCESS ou BUSY. No estado
+                // "conectado mas CCCD ainda nao habilitado" -- exatamente o
+                // estado CONNECTED da Tabela 2 do artigo, e tambem a janela
+                // entre connect() e start_notify() de qualquer cliente --
+                // notify_packet retorna NRF_ERROR_INVALID_STATE, que nao e
+                // nenhum dos dois. Resultado: packet_index nunca era zerado e
+                // continuava incrementando de 60 ate 255 (uint8), escrevendo
+                // int16 ate ~390 bytes DEPOIS do fim de um array de 60
+                // elementos, a ~2 kHz, corrompendo .bss adjacente (fifo,
+                // buffers de UART, estado de driver).
+                // Agora: limite explicito na escrita, e o indice e SEMPRE
+                // zerado quando o bloco fecha. Se nao deu para enviar, o
+                // bloco e descartado (contado em g_block_drop_count) -
+                // descartar dado e correto; corromper memoria nao e.
+                if (packet_index < EMG_PACKET_SIZE) {
+                    ble_packet_buffer[packet_index++] = out_sample;
+                }
 
                 if (packet_index >= EMG_PACKET_SIZE) {
-                    static uint32_t packet_count = 0;
-                    static uint32_t packet_errors = 0;
-
                     uint32_t ble_err = ble_emg_service_notify_packet(&m_emg_service,
                                                                       m_emg_service.conn_handle,
                                                                       ble_packet_buffer,
                                                                       EMG_PACKET_SIZE);
 
-                    if (ble_err != NRF_SUCCESS && ble_err != NRF_ERROR_BUSY) {
-                        packet_errors++;
-                    }
-                    if (packet_count++ % 100 == 0) {
-                        NRF_LOG_INFO("BLE: sent=%d errors=%d", packet_count, packet_errors);
+                    if (ble_err == NRF_SUCCESS) {
+                        g_notify_ok_count++;
+                    } else {
+                        g_notify_err_count++;
+                        g_block_drop_count++;
                     }
 
-                    if (ble_err == NRF_SUCCESS || ble_err == NRF_ERROR_BUSY) {
-                        packet_index = 0;
+                    if ((g_notify_ok_count + g_notify_err_count) % 200 == 0) {
+                        NRF_LOG_INFO("BLE: ok=%d err=%d drop=%d",
+                                     g_notify_ok_count, g_notify_err_count, g_block_drop_count);
                     }
+
+                    packet_index = 0;
                 }
             } else {
                 packet_index = 0;
