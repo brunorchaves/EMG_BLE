@@ -75,7 +75,7 @@ class EventEnergy:
 @dataclass
 class Autonomy:
     state_mix: dict[str, float]
-    avg_current_mA_at_5v: float
+    avg_current_mA: float
     avg_power_mW: float
     battery_mAh: float
     battery_v: float
@@ -272,24 +272,32 @@ def project_autonomy(
     battery_mah: float = config.BATTERY_MAH,
     battery_v: float = config.BATTERY_V,
     eta: float = config.BOOST_ETA_DEFAULT,
+    source_v: float = 5.0,
 ) -> Autonomy:
+    """Projeta autonomia a partir das estatisticas por estado.
+
+    ``source_v`` e a tensao do trilho medido. Precisa ser parametro: a versao
+    anterior tinha 5,0 V hardcoded, o que subestimava o ganho de qualquer run
+    feito em outra tensao (num run a 3,3 V a potencia saia 21,9 mW em vez dos
+    14,5 mW reais, escondendo justamente o beneficio que se queria medir).
+    """
     by_state = {s.state: s for s in stats}
     total_weight = sum(mix.values()) or 1.0
     mix_norm = {k: v / total_weight for k, v in mix.items()}
 
     avg_uA = sum(mix_norm.get(k, 0.0) * by_state[k].mean_uA for k in mix_norm if k in by_state)
     avg_mA = avg_uA / 1000.0
-    avg_mW = avg_mA * 5.0  # trilho de 5 V
+    avg_mW = avg_mA * source_v
 
     energy_wh_available = (battery_mah / 1000.0) * battery_v * eta
     hours_energy = energy_wh_available / (avg_mW / 1000.0) if avg_mW > 0 else float("nan")
 
-    charge_available_mah_at_5v = battery_mah * (battery_v / 5.0) * eta
-    hours_charge = charge_available_mah_at_5v / avg_mA if avg_mA > 0 else float("nan")
+    charge_available_mah = battery_mah * (battery_v / source_v) * eta
+    hours_charge = charge_available_mah / avg_mA if avg_mA > 0 else float("nan")
 
     return Autonomy(
         state_mix=mix_norm,
-        avg_current_mA_at_5v=avg_mA,
+        avg_current_mA=avg_mA,
         avg_power_mW=avg_mW,
         battery_mAh=battery_mah,
         battery_v=battery_v,
@@ -390,7 +398,7 @@ def analyze_run(run_dir: Path, spike_filter: bool = False, guard_s: float = 0.25
         config.State.STREAMING.value: 0.03,
     }
     if by_state_names.issuperset(default_mix.keys()):
-        autonomy = project_autonomy(stats, default_mix)
+        autonomy = project_autonomy(stats, default_mix, source_v=source_v)
         autonomy_dict = asdict(autonomy)
 
     report = RunReport(

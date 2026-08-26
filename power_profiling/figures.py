@@ -132,7 +132,7 @@ def fig_e_autonomy(run_dir: Path, out_path: Path) -> None:
         ax.text(0.5, 0.5, "Autonomia não calculada (estados faltando)", ha="center")
     else:
         text = (
-            f"Corrente média projetada: {autonomy['avg_current_mA_at_5v']:.3f} mA\n"
+            f"Corrente média projetada: {autonomy['avg_current_mA']:.3f} mA\n"
             f"Potência média: {autonomy['avg_power_mW']:.2f} mW\n\n"
             f"Bateria: {autonomy['battery_mAh']:.0f} mAh @ {autonomy['battery_v']:.1f} V\n"
             f"Eficiência do boost assumida: {autonomy['boost_eta']:.0%}\n\n"
