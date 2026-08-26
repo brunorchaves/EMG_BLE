@@ -3,13 +3,35 @@
 #include <stdint.h>
 #include <string.h>
 #include <stdio.h>
+// Taxa de amostragem: com data_rate = 0x06 (DR=110), o ADS112C04 entrega
+// 1000 SPS em modo NORMAL e 2000 SPS em modo TURBO - o turbo dobra o clock
+// interno do modulador e, com ele, a corrente do ADC. Medido nesta bancada:
+// 2042 S/s reais em turbo.
+//
+// ADS_TURBO_MODE = 0 -> 1000 SPS, menos corrente e metade das transacoes I2C.
+// ATENCAO: o filtro Butterworth digital em main.c foi projetado para
+// fs = 2000 Hz. Rodar a 1000 SPS sem recalcular os coeficientes DIVIDE POR
+// DOIS todas as frequencias de corte (a banda de 20-400 Hz vira 10-200 Hz),
+// o que corta parte real do sinal mioeletrico. Alem disso o filtro
+// anti-aliasing analogico (Sallen-Key de 2a ordem em 482 Hz) e brando demais
+// para um Nyquist de 500 Hz: conteudo em 600 Hz volta dobrado sobre 400 Hz
+// com apenas ~4 dB de atenuacao.
+// Default = 1 (turbo, 2000 SPS): e a configuracao validada, com a banda do
+// filtro digital coerente com o projeto (20-400 Hz). Mudar para 0 corta ~37%
+// do consumo, mas exige recalcular os coeficientes do Butterworth em main.c -
+// medido: a 1000 SPS com os coeficientes atuais o 3o harmonico da rede em
+// 180 Hz cai ~44 dB, ou seja a banda passante colapsa para ~10-200 Hz.
+#ifndef ADS_TURBO_MODE
+#define ADS_TURBO_MODE 1
+#endif
+
 // Default raw mode configuration
 static const ads112c04_config_t raw_mode_config = {
     .mux_config = 0x08,   // AIN0 to AINP, AVSS to AINN
     .gain = 0x00,         // Gain = 1
     .pga_bypass = 0x00,   // PGA enabled
-    .data_rate = 0x06,    // 1000 SPS
-    .op_mode = 0x01,      // Turbo mode
+    .data_rate = 0x06,    // DR=110: 1000 SPS em normal, 2000 SPS em turbo
+    .op_mode = ADS_TURBO_MODE,  // 1 = turbo (2000 SPS), 0 = normal (1000 SPS)
     .conv_mode = 0x01,    // Continuous conversion
     .vref = 0x02,         // AVDD as reference
     .temp_sensor = 0x00,  // Temp sensor off

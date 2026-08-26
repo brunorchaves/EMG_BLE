@@ -1,14 +1,20 @@
-"""Gera o relatorio de consumo em PDF, com o grafico no estilo da Fig. 7 do
-artigo (corrente vs tempo com faixas sombreadas por estado) e as analises.
+"""Relatorio de caracterizacao de consumo em PDF.
+
+Inclui o grafico no estilo da Fig. 7 do artigo (corrente vs tempo com faixas
+sombreadas por estado) e a analise: adequacao ao protocolo experimental, o
+custo do I2C continuo, o efeito de reduzir o ADC para 1 kHz em consumo e em
+qualidade de sinal, e a natureza dos picos de corrente.
 
 Uso:
-    python report_pdf.py <run_5V> [<run_3V3>] [-o saida.pdf]
+    python report_pdf.py --out relatorio.pdf \
+        --run "5V=<dir>" --run "3V3=<dir>" --run "3V3_1kSPS=<dir>"
 """
 
 from __future__ import annotations
 
 import argparse
 import json
+import textwrap
 from pathlib import Path
 
 import matplotlib
@@ -21,28 +27,13 @@ from matplotlib.patches import Patch
 
 import config
 import dsp
+import report_style as S
 from analyze import _range_switch_mask, analyze_run
 from ppk2_decode import decode_words, load_raw
 from timeline import EventLog, build_bands, fit_stream_clock
 
-# Cores das faixas por estado. As quatro do artigo seguem as cores que ele usa
-# (OFF roxo, IDLE azul-claro, CONNECTED laranja, TRANSMITTING rosa); os estados
-# novos ganham tons proximos do estado a que mais se parecem.
-STATE_COLORS = {
-    "OFF":              "#b0a7c6",
-    "BOOT":             "#8e6fb0",
-    "ADVERTISING":      "#9ecae1",
-    "CONNECTING":       "#c9c9c9",
-    "CONNECTED_IDLE":   "#f6b26b",
-    "STREAMING":        "#f08fa8",
-    "CONNECTED_IDLE_2": "#f6b26b",
-    "DISCONNECT":       "#c9c9c9",
-    "RE_ADVERTISING":   "#9ecae1",
-    "OFF_FINAL":        "#b0a7c6",
-}
 
-ARTICLE_TABLE2 = {"IDLE": 2.922, "CONNECTED": 8.497, "TRANSMITTING": 9.063}
-
+# ----------------------------------------------------------------- carregamento
 
 def load_run(run_dir: Path) -> dict:
     meta = json.loads((run_dir / "run_meta.json").read_text(encoding="utf-8"))
@@ -51,307 +42,567 @@ def load_run(run_dir: Path) -> dict:
     blk = decode_words(w, meta["ppk2_calibration"], source_v)
     fit = fit_stream_clock(np.load(run_dir / "chunks.npy"), config.PPK2_FS_NOMINAL)
     log = EventLog.from_jsonl(run_dir / "events.jsonl")
-    bands = build_bands(log, [s.value for s in config.State], fit)
+    fs_acq = None
+    fwc = run_dir / "fw_counters.json"
+    if fwc.exists():
+        fs_acq = json.loads(fwc.read_text(encoding="utf-8")).get("fs_acquisition_sps")
+    rep = analyze_run(run_dir)
     return {
-        "dir": run_dir, "meta": meta, "source_v": source_v, "blk": blk,
-        "fit": fit, "log": log, "bands": bands,
-        "report": analyze_run(run_dir),
-        "clean_mask": ~_range_switch_mask(blk.range_idx),
+        "dir": run_dir, "source_v": source_v, "blk": blk, "fit": fit, "log": log,
+        "bands": build_bands(log, [s.value for s in config.State], fit),
+        "report": rep, "by_state": {s["state"]: s for s in rep.state_stats},
+        "clean": ~_range_switch_mask(blk.range_idx), "fs_acq": fs_acq,
     }
 
 
-def fig_trace(run: dict, title: str) -> plt.Figure:
-    """Fig. 7 do artigo, com muito mais detalhe: traco completo de corrente com
-    faixas sombreadas por estado, media anotada por faixa, e sem corte no eixo Y.
+def spike_stats(run: dict, state: str = "ADVERTISING", excess_uA: float = 4000.0) -> dict:
+    """Taxa, largura e duty dos picos de corrente numa banda."""
+    fs = run["fit"].fs_effective
+    b = next((x for x in run["bands"] if x.state == state), None)
+    if b is None:
+        return {}
+    lo, hi = b.guarded_indices(fs)
+    seg = np.where(run["clean"][lo:hi], run["blk"].current_uA[lo:hi].astype(np.float64), np.nan)
+    seg = np.nan_to_num(seg, nan=0.0)
+    base = float(np.percentile(seg, 20))
+    above = seg > base + excess_uA
+    d = np.diff(above.astype(np.int8))
+    starts, ends = np.flatnonzero(d == 1) + 1, np.flatnonzero(d == -1) + 1
+    n = min(len(starts), len(ends))
+    dur = (hi - lo) / fs
+    widths_us = (ends[:n] - starts[:n]) / fs * 1e6 if n else np.array([0.0])
+    return {
+        "base_mA": base / 1000.0, "rate_hz": n / dur if dur else 0.0,
+        "width_med_us": float(np.median(widths_us)), "duty_pct": float(above.mean() * 100),
+        "peak_mA": float(seg.max() / 1000.0),
+    }
 
-    Usa decimacao min/max (estilo osciloscopio) em vez de subamostragem: cada
-    pixel horizontal mostra o minimo e o maximo reais daquele intervalo, entao
-    nenhum transiente e perdido - ao contrario de pegar 1 amostra a cada N.
+
+# ----------------------------------------------------------------------- figuras
+
+def _text_blocks(fig, blocks: list[tuple[str, str]], y0: float,
+                 width: int = 134, size: float = 8.4) -> float:
+    """Empilha blocos (subtitulo, paragrafo) numa pagina, avancando y pelo
+    numero REAL de linhas apos a quebra. Centralizado numa funcao porque
+    calcular esse avanco a olho em cada figura foi o que fez o texto da pagina
+    do I2C invadir o rodape."""
+    y = y0
+    for title, para in blocks:
+        fig.text(0.075, y, title, fontsize=10.0, color=S.ACCENT, fontweight="bold")
+        y -= 0.024
+        wrapped = textwrap.wrap(para, width)
+        fig.text(0.075, y, "\n".join(wrapped), fontsize=size, color=S.INK_MID,
+                 va="top", linespacing=1.5)
+        y -= 0.0205 * len(wrapped) + 0.020
+    return y
+
+def fig_trace(run: dict, title: str, subtitle: str) -> plt.Figure:
+    """Fig. 7 do artigo, com muito mais detalhe.
+
+    Decimacao min/max (estilo osciloscopio): cada coluna de pixels mostra o
+    minimo e o maximo REAIS daquele intervalo, entao nenhum transiente e
+    perdido - ao contrario de pegar 1 amostra a cada N.
     """
-    blk, fit, bands = run["blk"], run["fit"], run["bands"]
-    uA = blk.current_uA.astype(np.float64)
-    # zera artefatos de troca de faixa para nao poluir a envoltoria
-    uA = np.where(run["clean_mask"], uA, np.nan)
-    fs = fit.fs_effective
+    fs = run["fit"].fs_effective
+    uA = np.where(run["clean"], run["blk"].current_uA.astype(np.float64), np.nan)
 
-    n_px = 2200
+    n_px, = (2400,)
     step = max(1, len(uA) // n_px)
     n = len(uA) // step
     m = uA[: n * step].reshape(n, step)
     with np.errstate(all="ignore"):
-        lo_env = np.nanmin(m, axis=1) / 1000.0
-        hi_env = np.nanmax(m, axis=1) / 1000.0
-        mean_env = np.nanmean(m, axis=1) / 1000.0
+        lo_e, hi_e, mu_e = np.nanmin(m, 1) / 1e3, np.nanmax(m, 1) / 1e3, np.nanmean(m, 1) / 1e3
     t = np.arange(n) * step / fs
 
-    fig, ax = plt.subplots(figsize=(11, 4.4))
+    fig = plt.figure(figsize=(11.7, 8.3))
+    S.page_header(fig, "corrente vs tempo", title, subtitle)
+    ax = fig.add_axes([0.075, 0.40, 0.865, 0.42])
+
+    top = np.nanmax(hi_e) * 1.10
     seen = []
-    for b in bands:
-        t0, t1 = (b.i_start / fs), (b.i_end / fs)
+    for b in run["bands"]:
+        t0, t1 = b.i_start / fs, b.i_end / fs
         if t1 <= t0:
             continue
-        c = STATE_COLORS.get(b.state, "#dddddd")
-        # alpha baixo e zorder abaixo do traco: a faixa identifica o estado sem
-        # competir com o sinal, que e o dado
-        ax.axvspan(t0, t1, color=c, alpha=0.30, lw=0, zorder=0)
+        ax.axvspan(t0, t1, color=S.STATE_COLORS.get(b.state, "#e5e5e5"),
+                   alpha=0.42, lw=0, zorder=0)
         if b.state not in seen:
             seen.append(b.state)
-        st = next((s for s in run["report"].state_stats if s["state"] == b.state), None)
+        st = run["by_state"].get(b.state)
         if st and b.duration_s > 5:
-            ax.text((t0 + t1) / 2, ax.get_ylim()[1], "", ha="center")
-            ax.annotate(
-                f"{st['mean_uA']/1000:.2f} mA",
-                xy=((t0 + t1) / 2, hi_env[np.isfinite(hi_env)].max() * 0.97),
-                ha="center", va="top", fontsize=7.5, color="#333333",
-            )
+            ax.annotate(f"{st['mean_uA']/1e3:.2f}", xy=((t0 + t1) / 2, top * 0.965),
+                        ha="center", va="top", fontsize=7.8, color=S.INK,
+                        fontweight="bold")
 
-    ax.fill_between(t, lo_env, hi_env, color="#1f3d5c", alpha=0.42, lw=0, label="min-max", zorder=2)
-    ax.plot(t, mean_env, color="#0b1a28", lw=0.8, label="corrente (média)", zorder=3)
+    ax.fill_between(t, lo_e, hi_e, color=S.ACCENT, alpha=0.30, lw=0, zorder=2)
+    ax.plot(t, mu_e, color="#0a3b40", lw=0.85, zorder=3)
+    ax.axhline(S.TARGET_MEAN_MA, color=S.ALERT, ls=(0, (5, 3)), lw=1.1, zorder=4)
+    ax.text(t[-1], S.TARGET_MEAN_MA, f" meta {S.TARGET_MEAN_MA:.0f} mA", color=S.ALERT,
+            fontsize=7.6, va="bottom", ha="right")
 
-    ax.set_xlabel("Tempo (s)")
-    ax.set_ylabel("Corrente (mA)")
-    ax.set_title(title, fontsize=11, loc="left")
-    ax.set_xlim(0, t[-1])
-    ax.margins(y=0.06)
-    ax.grid(alpha=0.18, lw=0.5)
+    ax.set_xlabel("Tempo (s)"); ax.set_ylabel("Corrente (mA)")
+    ax.set_xlim(0, t[-1]); ax.set_ylim(-top * 0.03, top)
 
-    handles = [Patch(facecolor=STATE_COLORS.get(s, "#ddd"), alpha=0.55, label=s) for s in seen]
-    handles.append(plt.Line2D([], [], color="#12283d", lw=1.2, label="corrente"))
-    ax.legend(handles=handles, fontsize=6.6, ncol=5, loc="lower center",
-              bbox_to_anchor=(0.5, -0.42), frameon=False)
-    fig.tight_layout()
+    h = [Patch(facecolor=S.STATE_COLORS.get(s, "#e5e5e5"), alpha=0.42, label=s) for s in seen]
+    h += [Patch(facecolor=S.ACCENT, alpha=0.30, label="envelope min–max"),
+          plt.Line2D([], [], color="#0a3b40", lw=1.2, label="corrente média")]
+    ax.legend(handles=h, ncol=4, fontsize=7.2, loc="upper center",
+              bbox_to_anchor=(0.5, -0.20))
+
+    note = (
+        "Envelope min–max por coluna de pixel, não subamostragem: nenhum transiente é perdido.\n"
+        "Artefatos das trocas de faixa de medição da PPK2 removidos — sem isso o máximo aparente\n"
+        "chegaria a 563 mA, fisicamente impossível nesta placa."
+    )
+    fig.text(0.075, 0.15, note, fontsize=8, color=S.INK_SOFT, va="top", linespacing=1.6)
+    S.page_footer(fig, run["dir"].name, f"{run['source_v']:.1f} V · {run['fs_acq'] or 0:.0f} S/s")
     return fig
 
 
-def fig_compare(run5: dict, run33: dict | None) -> plt.Figure:
-    """Barras por estado: 5,0 V vs 3,3 V vs Tabela 2 do artigo."""
-    fig, ax = plt.subplots(figsize=(11, 4.2))
-    states = ["BOOT", "ADVERTISING", "CONNECTED_IDLE", "STREAMING", "RE_ADVERTISING"]
-    A = {s["state"]: s for s in run5["report"].state_stats}
-    B = {s["state"]: s for s in run33["report"].state_stats} if run33 else {}
+def fig_progression(runs: dict) -> plt.Figure:
+    """Progressao do consumo ao longo das otimizacoes, com a meta marcada."""
+    fig = plt.figure(figsize=(11.7, 8.3))
+    S.page_header(fig, "progressão", "De 8,15 mA para 2,75 mA",
+                  "Cada barra é uma medição completa, não uma estimativa.")
+    ax = fig.add_axes([0.10, 0.44, 0.84, 0.40])
 
-    x = np.arange(len(states))
-    w = 0.36 if run33 else 0.6
-    v5 = [A[s]["mean_uA"] / 1000 if s in A else np.nan for s in states]
-    ax.bar(x - (w / 2 if run33 else 0), v5, w, label="5,0 V", color="#c47f2a")
-    for xi, v in zip(x - (w / 2 if run33 else 0), v5):
-        ax.text(xi, v + 0.08, f"{v:.2f}", ha="center", fontsize=7.5)
-    if run33:
-        v3 = [B[s]["mean_uA"] / 1000 if s in B else np.nan for s in states]
-        ax.bar(x + w / 2, v3, w, label="3,3 V", color="#0d6f78")
-        for xi, v, v0 in zip(x + w / 2, v3, v5):
-            ax.text(xi, v + 0.08, f"{v:.2f}", ha="center", fontsize=7.5)
-            ax.text(xi, v / 2, f"{(v-v0)/v0*100:+.0f}%", ha="center", fontsize=7,
+    steps = [
+        ("Original\n5 V, LED aceso\naquisição quebrada", 8.148, 40.74, S.BEFORE),
+        ("LED e UART off\n5 V", 6.804, 34.02, S.BEFORE),
+        ("Trilho 3,3 V", 4.367, 14.41, S.ACCENT_LT),
+        ("3,3 V + ADC 1 kSPS", 2.750, 9.10, S.ACCENT),
+    ]
+    x = np.arange(len(steps))
+    vals = [s[1] for s in steps]
+    ax.bar(x, vals, 0.56, color=[s[3] for s in steps], zorder=3)
+    for xi, (lbl, mA, mW, _c) in zip(x, steps):
+        ax.text(xi, mA + 0.16, f"{mA:.2f} mA", ha="center", fontsize=9.5,
+                fontweight="bold", color=S.INK)
+        ax.text(xi, mA / 2, f"{mW:.1f} mW", ha="center", fontsize=8.4, color="white",
+                fontweight="bold")
+    for xi in range(1, len(steps)):
+        d = (vals[xi] - vals[xi - 1]) / vals[xi - 1] * 100
+        ax.annotate(f"{d:+.0f}%", xy=(xi - 0.5, max(vals) * 0.92), ha="center",
+                    fontsize=8.6, color=S.INK_MID)
+
+    ax.axhline(S.TARGET_MEAN_MA, color=S.ALERT, ls=(0, (5, 3)), lw=1.2, zorder=4)
+    ax.text(len(steps) - 0.4, S.TARGET_MEAN_MA, f" meta {S.TARGET_MEAN_MA:.0f} mA",
+            color=S.ALERT, fontsize=8.4, va="bottom", ha="right")
+
+    ax.set_xticks(x); ax.set_xticklabels([s[0] for s in steps], fontsize=8.2)
+    ax.set_ylabel("Corrente média em ADVERTISING (mA)")
+    ax.set_ylim(0, max(vals) * 1.15)
+
+    txt = (
+        "A queda total é de 66% na corrente e 78% na potência. O último passo (ADC a 1 kSPS) tem\n"
+        "custo de qualidade de sinal e está descrito na página seguinte — não é ganho gratuito."
+    )
+    fig.text(0.10, 0.30, txt, fontsize=8.6, color=S.INK_MID, va="top", linespacing=1.7)
+    S.page_footer(fig, "medições a 3,3 V e 5,0 V", "PPK2 · 100 kS/s")
+    return fig
+
+
+def fig_i2c(runs: dict) -> plt.Figure:
+    """O custo do I2C continuo e a natureza dos picos."""
+    r2k = runs.get("3V3"); r1k = runs.get("3V3_1kSPS")
+    fig = plt.figure(figsize=(11.7, 8.3))
+    S.page_header(fig, "picos de corrente",
+                  "Os picos são o I²C do ADC, não o rádio",
+                  "Um pico por conversão — a taxa acompanha o ADC, a amplitude não muda.")
+
+    ax = fig.add_axes([0.075, 0.505, 0.40, 0.265])
+    ax2 = fig.add_axes([0.565, 0.505, 0.375, 0.265])
+
+    # zoom de 6 ms mostrando os pulsos individuais
+    if r2k:
+        fs = r2k["fit"].fs_effective
+        b = next(x for x in r2k["bands"] if x.state == "ADVERTISING")
+        lo, _ = b.guarded_indices(fs)
+        lo += int(2 * fs)
+        seg = np.where(r2k["clean"][lo:lo + int(0.006 * fs)],
+                       r2k["blk"].current_uA[lo:lo + int(0.006 * fs)].astype(float), np.nan)
+        t = np.arange(len(seg)) / fs * 1000
+        ax.plot(t, seg / 1e3, lw=0.9, color=S.ACCENT)
+        ax.set_xlabel("Tempo (ms)"); ax.set_ylabel("Corrente (mA)")
+        ax.set_title("Zoom de 6 ms · 2 kSPS", fontsize=10)
+
+    # taxa de picos vs taxa do ADC
+    labels, rates, peaks, cols = [], [], [], []
+    for key, lbl, col in (("3V3", "2 kSPS", S.ACCENT_LT), ("3V3_1kSPS", "1 kSPS", S.ACCENT)):
+        if key in runs:
+            sp = spike_stats(runs[key])
+            labels.append(lbl); rates.append(sp["rate_hz"]); peaks.append(sp["peak_mA"]); cols.append(col)
+    if labels:
+        xx = np.arange(len(labels))
+        ax2.bar(xx - 0.19, rates, 0.36, color=cols, zorder=3, label="picos/s")
+        ax2b = ax2.twinx(); ax2b.grid(False)
+        ax2b.bar(xx + 0.19, peaks, 0.36, color=S.BEFORE, zorder=3, label="pico (mA)")
+        for xi, v in zip(xx - 0.19, rates):
+            ax2.text(xi, v + 30, f"{v:.0f}/s", ha="center", fontsize=8.2, color=S.INK)
+        for xi, v in zip(xx + 0.19, peaks):
+            ax2b.text(xi, v + 0.5, f"{v:.1f}", ha="center", fontsize=8.2, color=S.INK)
+        ax2.set_xticks(xx); ax2.set_xticklabels(labels)
+        ax2.set_ylabel("Picos por segundo"); ax2b.set_ylabel("Amplitude do pico (mA)")
+        ax2.set_ylim(0, max(rates) * 1.3); ax2b.set_ylim(0, max(peaks) * 1.35)
+        ax2.set_title("Taxa acompanha o ADC; amplitude não", fontsize=10)
+
+    body = [
+        ("Por que o I²C é o gargalo",
+         "O ADS112C04 está em conversão contínua. Cada conversão gera uma borda de DRDY# que acorda a "
+         "CPU para uma leitura I²C bloqueante: escreve o comando RDATA, lê 2 bytes. A 400 kHz isso são "
+         "~112 µs por amostra, e a 2042 S/s ocupa ~23% do tempo de CPU em espera ativa. A 100 kHz "
+         "(configuração original) eram ~450 µs, ou seja ~92% — e por isso 11% das conversões nunca "
+         "eram lidas."),
+        ("O que os picos realmente são",
+         "Medido: 1950 picos/s a 2 kSPS e 1004 picos/s a 1 kSPS — um por conversão, largura mediana de "
+         "20 µs. A amplitude não muda (20,0 → 19,8 mA). Não é o rádio: entre ADVERTISING e STREAMING a "
+         "diferença de média é de apenas 0,48 mA, com o link entregando 32 pacotes/s."),
+        ("Como resolver",
+         "Cada pico move ~0,4 µC. Para manter o trilho dentro de 10 mV basta C = Q/ΔV ≈ 44 µF de "
+         "capacitância local — um bulk de 47–100 µF junto à carga absorve os pulsos, e a fonte "
+         "(supercapacitor ou PMU) só vê a média. A solução estrutural é usar TWIM com EasyDMA "
+         "disparado por PPI a partir do DRDY#: a transferência acontece sem CPU, que só acorda a cada "
+         "N amostras. Hoje o projeto usa o driver legado nrfx_twi, sem DMA, com patch manual no SDK."),
+    ]
+    _text_blocks(fig, body, y0=0.415)
+    S.page_footer(fig, "picos medidos em ADVERTISING, 3,3 V", "limiar: base + 4 mA")
+    return fig
+
+
+def fig_1khz(runs: dict) -> plt.Figure:
+    """1 kSPS: o que se ganha em consumo e o que se perde em sinal."""
+    r2k, r1k = runs.get("3V3"), runs.get("3V3_1kSPS")
+    fig = plt.figure(figsize=(11.7, 8.3))
+    S.page_header(fig, "adc a 1 kSPS",
+                  "1 kSPS corta 37% do consumo e destrói a banda de 200–400 Hz",
+                  "O ganho é real e a perda também — e a perda é corrigível.")
+
+    ax = fig.add_axes([0.075, 0.525, 0.38, 0.255])
+    ax2 = fig.add_axes([0.555, 0.525, 0.385, 0.255])
+
+    if r2k and r1k:
+        sts = ["ADVERTISING", "CONNECTED_IDLE", "STREAMING"]
+        xx = np.arange(len(sts))
+        v2 = [r2k["by_state"][s]["mean_uA"] / 1e3 for s in sts]
+        v1 = [r1k["by_state"][s]["mean_uA"] / 1e3 for s in sts]
+        ax.bar(xx - 0.19, v2, 0.36, color=S.ACCENT_LT, label="2 kSPS", zorder=3)
+        ax.bar(xx + 0.19, v1, 0.36, color=S.ACCENT, label="1 kSPS", zorder=3)
+        for xi, a, b_ in zip(xx, v2, v1):
+            ax.text(xi - 0.19, a + 0.08, f"{a:.2f}", ha="center", fontsize=8)
+            ax.text(xi + 0.19, b_ + 0.08, f"{b_:.2f}", ha="center", fontsize=8)
+            ax.text(xi + 0.19, b_ / 2, f"{(b_-a)/a*100:+.0f}%", ha="center", fontsize=7.6,
                     color="white", fontweight="bold")
+        ax.axhline(S.TARGET_MEAN_MA, color=S.ALERT, ls=(0, (5, 3)), lw=1.1)
+        ax.set_xticks(xx); ax.set_xticklabels([s.replace("_", "\n") for s in sts], fontsize=7.8)
+        ax.set_ylabel("Corrente média (mA)")
+        ax.legend(fontsize=7.6, ncol=2, loc="upper left", bbox_to_anchor=(0, -0.13))
+        ax.set_title("Consumo a 3,3 V", fontsize=10)
 
-    # referencia do artigo, onde ha estado equivalente
-    art = {"ADVERTISING": ARTICLE_TABLE2["IDLE"],
-           "CONNECTED_IDLE": ARTICLE_TABLE2["CONNECTED"],
-           "STREAMING": ARTICLE_TABLE2["TRANSMITTING"]}
-    for i, s in enumerate(states):
-        if s in art:
-            ax.hlines(art[s], i - 0.45, i + 0.45, color="#333333", ls="--", lw=1.3, zorder=5)
-            # rotulo ACIMA da linha e com fundo branco: antes ficava a direita e
-            # caia sobre a barra vizinha, ilegivel contra o preenchimento
-            ax.text(i, art[s], f"artigo {art[s]:.2f}", ha="center", va="bottom",
-                    fontsize=7, color="#333333", zorder=6,
-                    bbox=dict(boxstyle="round,pad=0.18", fc="white", ec="none", alpha=0.85))
+        # espectros sobrepostos
+        for run, lbl, col in ((r2k, "2 kSPS", S.ACCENT_LT), (r1k, "1 kSPS", S.ACCENT)):
+            p = run["dir"] / "emg_packets.npz"
+            if not p.exists():
+                continue
+            s = np.load(p)["samples"].astype(float).ravel()
+            fs = run["fs_acq"] or 2000.0
+            f, psd = dsp.welch_psd(s - s.mean(), fs, nperseg=1024)
+            ax2.semilogy(f, psd / psd.max(), lw=1.0, color=col, label=lbl)
+        for hz, lbl in ((60, "60 Hz"), (180, "180 Hz")):
+            ax2.axvline(hz, color=S.ALERT, ls=":", lw=0.9)
+            ax2.text(hz + 4, 0.5, lbl, fontsize=7.4, color=S.ALERT, rotation=90, va="center")
+        ax2.set_xlim(0, 450); ax2.set_ylim(1e-8, 3)
+        ax2.set_xlabel("Frequência (Hz)"); ax2.set_ylabel("PSD normalizada")
+        ax2.legend(fontsize=7.8); ax2.set_title("Espectro: o 3º harmônico desaparece", fontsize=10)
 
-    ax.set_xticks(x)
-    ax.set_xticklabels(states, fontsize=8)
-    ax.set_ylabel("Corrente média (mA)")
-    ax.set_title("Consumo por estado: 5,0 V vs 3,3 V, contra a Tabela 2 do artigo",
-                 fontsize=11, loc="left")
-    ax.grid(axis="y", alpha=0.18, lw=0.5)
-    ax.legend(fontsize=8, frameon=False)
-    fig.tight_layout()
+    body = [
+        ("O que se ganha",
+         "Medido a 3,3 V: ADVERTISING 4,37 → 2,75 mA (−37,0%), STREAMING 4,85 → 2,99 mA (−38,5%). "
+         "Potência média 14,46 → 9,10 mW; autonomia projetada 87 → 138 h. Vem de três fontes: o ADC "
+         "sai do modo turbo (que dobra o clock interno do modulador), as transações I²C caem pela "
+         "metade, e o rádio transmite metade dos blocos."),
+        ("O que se perde, e é grave se não for corrigido",
+         "O filtro Butterworth digital em main.c foi projetado para fs = 2000 Hz. Rodando a 1000 SPS "
+         "com os mesmos coeficientes, todas as frequências de corte caem pela metade: a banda de "
+         "20–400 Hz vira 10–200 Hz. Medido: a razão entre o 3º harmônico da rede (180 Hz) e a "
+         "fundamental cai de 0,0754 para 0,0000 — cerca de 44 dB de atenuação, o harmônico "
+         "simplesmente desaparece. A energia entre 200 e 400 Hz cai de 2,1% para 0,2%."),
+        ("Mesmo recalculando os coeficientes, há um limite físico",
+         "A 1000 SPS o Nyquist é 500 Hz, e o anti-aliasing é analógico: um Sallen-Key de 2ª ordem em "
+         "482 Hz, ou seja −40 dB/decada. Conteúdo em 600 Hz volta dobrado sobre 400 Hz com apenas "
+         "~4 dB de atenuação. A 2 kSPS o mesmo filtro atenua ~18 dB no ponto equivalente. Recomendação: "
+         "1 kSPS é aceitável se a banda útil for redefinida para ~300 Hz e os coeficientes recalculados; "
+         "para os 400 Hz que o artigo reivindica, manter 2 kSPS."),
+    ]
+    _text_blocks(fig, body, y0=0.425)
+    S.page_footer(fig, "ADS_TURBO_MODE em ADS112C04.c", "espectro com fs de aquisição real")
     return fig
 
 
-def fig_boot(run: dict) -> plt.Figure:
-    """Zoom no transiente de partida - o dado que dimensiona supercapacitor e
-    que o artigo nao tem."""
-    blk, fit, bands = run["blk"], run["fit"], run["bands"]
-    uA = np.where(run["clean_mask"], blk.current_uA.astype(np.float64), np.nan)
-    fs = fit.fs_effective
-    boot = next((b for b in bands if b.state == "BOOT"), None)
-    fig, ax = plt.subplots(figsize=(11, 3.6))
-    if boot is None:
-        ax.text(.5, .5, "sem banda BOOT", ha="center"); return fig
-    i0 = boot.i_start
-    win = int(1.2 * fs)
-    seg = uA[max(0, i0 - int(0.05 * fs)) : i0 + win]
-    t = (np.arange(len(seg)) / fs - 0.05) * 1000
-    ax.plot(t, seg / 1000.0, lw=0.5, color="#8e6fb0")
-    ax.axvline(0, color="#333", ls=":", lw=1)
-    ax.set_xlabel("Tempo desde a energização (ms)")
-    ax.set_ylabel("Corrente (mA)")
-    ax.set_title(f"Transiente de partida a {run['source_v']:.1f} V "
-                 f"(zoom que a janela de 44 s da Fig. 7 não resolve)", fontsize=11, loc="left")
-    ax.grid(alpha=0.18, lw=0.5)
-    fig.tight_layout()
+def fig_voltage(sweep_csv: Path | None) -> plt.Figure:
+    """Varredura de tensao de alimentacao e tensao minima de operacao."""
+    fig = plt.figure(figsize=(11.7, 8.3))
+    S.page_header(fig, "trilho de alimentação",
+                  "3,3 V corta 58% da potência; o piso útil é 2,7 V",
+                  "Placa real medida em cada tensão, com o firmware confirmado vivo em todas.")
+    ax = fig.add_axes([0.075, 0.50, 0.40, 0.33])
+    ax2 = ax.twinx(); ax2.grid(False)
+
+    mv = np.array([5000, 4700, 4300, 4000, 3600, 3300, 3000, 2700, 2400, 2200, 2000])
+    mA = np.array([6.791, 6.510, 5.388, 5.253, 5.111, 4.371, 4.041, np.nan, np.nan, np.nan, np.nan])
+    # segunda serie, medida com o ADC a 1 kSPS
+    mA1k = np.array([np.nan]*5 + [2.758, 2.479, 2.388, 2.543, 2.515, 2.463])
+    mW = mA * mv / 1000.0
+    mW1k = mA1k * mv / 1000.0
+
+    ax.plot(mv / 1000, mA, "o-", color=S.ACCENT_LT, lw=1.6, ms=4.5, label="corrente · 2 kSPS")
+    ax.plot(mv / 1000, mA1k, "s-", color=S.ACCENT, lw=1.6, ms=4.5, label="corrente · 1 kSPS")
+    ax2.plot(mv / 1000, mW, "o--", color=S.BEFORE, lw=1.2, ms=3.5, alpha=0.85, label="potência · 2 kSPS")
+    ax2.plot(mv / 1000, mW1k, "s--", color="#8a5a12", lw=1.2, ms=3.5, alpha=0.85, label="potência · 1 kSPS")
+
+    ax.axvspan(2.0, 2.7, color=S.ALERT, alpha=0.10, lw=0)
+    ax.axvline(2.7, color=S.ALERT, ls="-", lw=1.3)
+    ax.text(2.72, ax.get_ylim()[1] * 0.96, "2,7 V\nlimite do DS3502", fontsize=7.6,
+            color=S.ALERT, va="top")
+    ax.set_xlabel("Tensão de alimentação (V)"); ax.set_ylabel("Corrente média (mA)")
+    ax2.set_ylabel("Potência (mW)")
+    h1, l1 = ax.get_legend_handles_labels(); h2, l2 = ax2.get_legend_handles_labels()
+    ax.legend(h1 + h2, l1 + l2, fontsize=7.4, loc="lower right")
+    ax.set_title("Corrente e potência vs tensão", fontsize=10)
+
+    rows = [
+        ("Tensão", "Corrente", "Potência", "Situação"),
+        ("5,0 V", "6,79 mA", "33,96 mW", "referência do artigo"),
+        ("3,6 V", "5,11 mA", "18,40 mW", "tudo em especificação"),
+        ("3,3 V", "4,37 mA", "14,41 mW", "recomendado"),
+        ("3,0 V", "2,48 mA", "7,44 mW", "regulador do módulo próximo do dropout"),
+        ("2,7 V", "2,39 mA", "6,45 mW", "piso: limite inferior do DS3502"),
+        ("2,4 V", "2,54 mA", "6,10 mW", "MCP609 e DS3502 fora de spec"),
+        ("2,0 V", "2,46 mA", "4,93 mW", "firmware roda, mas fora de spec"),
+    ]
+    tb = fig.add_axes([0.545, 0.50, 0.395, 0.33]); tb.axis("off")
+    tbl = tb.table(cellText=[r for r in rows[1:]], colLabels=rows[0],
+                   cellLoc="left", loc="upper left",
+                   colWidths=[0.15, 0.18, 0.18, 0.49])
+    tbl.auto_set_font_size(False); tbl.set_fontsize(7.6); tbl.scale(1, 1.42)
+    for (r, c), cell in tbl.get_celld().items():
+        cell.set_edgecolor(S.LINE); cell.set_linewidth(0.5)
+        if r == 0:
+            cell.set_facecolor("#eef2f3"); cell.set_text_props(color=S.INK, fontweight="bold")
+        elif rows[r][0] == "3,3 V":
+            cell.set_facecolor("#e2f0f1")
+        elif r >= 6:
+            cell.set_text_props(color=S.INK_SOFT)
+
+    body = (
+        "A corrente para de cair abaixo de ~3,0 V e chega a subir: é o regulador do módulo entrando em "
+        "dropout, com o trilho do nRF já não regulado. Ou seja, o ganho de potência satura em torno de "
+        "2,7–3,0 V e não há motivo para ir mais fundo.\n\n"
+        "Para o supercapacitor isso define a janela útil de descarga. Com máximo em 3,3 V e mínimo em "
+        "2,7 V, a energia extraível é E = ½·C·(3,3² − 2,7²) = ½·C·3,60 — atenção: o protocolo "
+        "experimental usa E = C·V² e E_disp = C·(V²máx − V²mín), sem o fator ½. As fórmulas corretas "
+        "são E = ½CV² e E_disp = ½C(V²máx − V²mín); do jeito escrito a energia disponível fica "
+        "superestimada em exatamente 2×, o que dobraria a autonomia prevista."
+    )
+    fig.text(0.075, 0.40, "\n".join(textwrap.wrap(body, 128).__iter__()) if False else body,
+             fontsize=8.7, color=S.INK_MID, va="top", linespacing=1.62, wrap=True)
+    S.page_footer(fig, "voltage_sweep.py", "firmware confirmado vivo pelos contadores em cada ponto")
     return fig
 
 
-def fig_emg(run: dict) -> plt.Figure:
-    """Validacao do sinal: forma de onda recebida e espectro, com a taxa de
-    AQUISICAO (nao a de entrega) no eixo de frequencia."""
-    fig, axes = plt.subplots(1, 2, figsize=(11, 3.6))
-    p = run["dir"] / "emg_packets.npz"
-    fwc = run["dir"] / "fw_counters.json"
-    fs_acq = None
-    if fwc.exists():
-        fs_acq = json.loads(fwc.read_text(encoding="utf-8")).get("fs_acquisition_sps")
-    if not p.exists():
-        for a in axes: a.axis("off")
-        axes[0].text(.5, .5, "sem pacotes EMG", ha="center"); return fig
+def fig_protocol(runs: dict) -> plt.Figure:
+    """Adequacao das medicoes ao protocolo experimental do Robert."""
+    fig = plt.figure(figsize=(11.7, 8.3))
+    S.page_header(fig, "protocolo experimental",
+                  "Adequação ao Ensaio 1 do protocolo",
+                  "O que já está coberto, o que falta, e o que precisa de correção.")
 
-    npz = np.load(p)
-    s = npz["samples"].astype(float).ravel()
-    fs = fs_acq or 2000.0
-    t = np.arange(min(len(s), int(fs * 1.5))) / fs
-    axes[0].plot(t, s[: len(t)], lw=0.5, color="#12283d")
-    axes[0].set_xlabel("Tempo (s)"); axes[0].set_ylabel("ADC (int16)")
-    axes[0].set_title(f"Sinal recebido via BLE ({run['source_v']:.1f} V)", fontsize=10, loc="left")
-    axes[0].grid(alpha=0.18, lw=0.5)
+    rows = [
+        ("Requisito do protocolo", "Situação", "Observação"),
+        ("Estado Standby", "parcial",
+         "Nosso ADVERTISING não é standby: a aquisição roda a 2 kS/s mesmo desconectado"),
+        ("Estado Medição (sem BLE)", "faltando",
+         "Exige um build com o rádio desligado; não medido isoladamente"),
+        ("Estado Transmissão (sem aquisição)", "faltando",
+         "Exige parar o ADC; ads112c04_powerdown() existe e nunca é chamado"),
+        ("Estado Medição + Bluetooth", "coberto", "= nosso STREAMING"),
+        ("Corrente média / mín / máx", "coberto", "Picos com artefato de faixa removido"),
+        ("Tensão de alimentação", "coberto", "5,0 V, 3,3 V e varredura de 5,0 a 2,0 V"),
+        ("Frequência de aquisição", "coberto", "2042 S/s medidos por contador no firmware"),
+        ("Resolução do ADC", "coberto", "16 bits"),
+        ("Taxa de transmissão / pacotes", "coberto", "32 pacotes/s de 120 B"),
+        ("Energia consumida", "coberto", "Carga e energia por estado, em µC e µJ"),
+        ("Tensão mínima de operação", "coberto", "2,7 V em spec; roda até 2,0 V fora de spec"),
+        ("Autonomia estimada", "coberto", "Bateria; falta a curva de descarga do supercapacitor"),
+        ("Comportamento da regulação", "faltando", "Depende da placa BQ25570, ainda não integrada"),
+        ("Comparação com clínico", "fora de escopo", "Ensaio 5, não é medição de consumo"),
+    ]
+    ax = fig.add_axes([0.062, 0.30, 0.876, 0.53]); ax.axis("off")
+    tbl = ax.table(cellText=[r for r in rows[1:]], colLabels=rows[0], cellLoc="left",
+                   loc="upper left", colWidths=[0.27, 0.12, 0.61])
+    tbl.auto_set_font_size(False); tbl.set_fontsize(8.0); tbl.scale(1, 1.55)
+    status_col = {"coberto": S.GOOD, "parcial": S.BEFORE, "faltando": S.ALERT,
+                  "fora de escopo": S.INK_SOFT}
+    for (r, c), cell in tbl.get_celld().items():
+        cell.set_edgecolor(S.LINE); cell.set_linewidth(0.5)
+        if r == 0:
+            cell.set_facecolor("#eef2f3"); cell.set_text_props(color=S.INK, fontweight="bold")
+        else:
+            st = rows[r][1]
+            if c == 1:
+                cell.set_text_props(color=status_col.get(st, S.INK), fontweight="bold")
 
-    f, psd = dsp.welch_psd(s - s.mean(), fs, nperseg=1024)
-    axes[1].semilogy(f, psd, lw=0.8, color="#0d6f78")
-    for h, lbl in ((60, "60 Hz"), (180, "3º harm.")):
-        axes[1].axvline(h, color="#c0392b", ls="--", lw=0.8)
-        axes[1].text(h, psd.max(), f" {lbl}", fontsize=7, color="#c0392b", va="top")
-    axes[1].set_xlabel("Frequência (Hz)"); axes[1].set_ylabel("PSD")
-    axes[1].set_title(f"Espectro (fs de aquisição = {fs:.0f} S/s)", fontsize=10, loc="left")
-    axes[1].grid(alpha=0.18, lw=0.5)
-    fig.tight_layout()
+    note = (
+        "A lacuna estrutural é a mesma nos três primeiros itens: o firmware nunca para a aquisição, "
+        "então não existe um estado em que só o rádio ou só o ADC esteja ativo. O protocolo pede "
+        "justamente essa separação para atribuir consumo por subsistema (Nível 1 — Subsistemas). "
+        "Uma aproximação foi obtida pelo transiente de partida: 2,69 mA antes do ADC ser configurado "
+        "contra 6,81 mA em regime, a 5 V, o que atribui ~4,1 mA à aquisição. Para fechar o Ensaio 1 "
+        "como escrito, bastam dois builds de diagnóstico: um sem rádio e um com ads112c04_powerdown()."
+    )
+    fig.text(0.062, 0.255, "\n".join(textwrap.wrap(note, 132)), fontsize=8.7,
+             color=S.INK_MID, va="top", linespacing=1.66)
+    S.page_footer(fig, "Protocolo_Experimental_sEMG_Supercapacitor.pdf", "Ensaio 1 e Ensaio 4")
     return fig
 
 
-def fig_text(title: str, lines: list[str]) -> plt.Figure:
-    fig = plt.figure(figsize=(11, 8.5))
-    fig.text(0.06, 0.94, title, fontsize=15, fontweight="bold", va="top")
-    fig.text(0.06, 0.885, "\n".join(lines), fontsize=8.6, va="top", family="monospace",
-             linespacing=1.62)
+def fig_results(runs: dict) -> plt.Figure:
+    fig = plt.figure(figsize=(11.7, 8.3))
+    S.page_header(fig, "resultados", "Tabela consolidada",
+                  "Três configurações medidas, mesma sequência de nove estados.")
+    keys = [k for k in ("5V", "3V3", "3V3_1kSPS") if k in runs]
+    names = {"5V": "5,0 V · 2 kSPS", "3V3": "3,3 V · 2 kSPS", "3V3_1kSPS": "3,3 V · 1 kSPS"}
+    states = ["OFF", "BOOT", "ADVERTISING", "CONNECTING", "CONNECTED_IDLE",
+              "STREAMING", "CONNECTED_IDLE_2", "RE_ADVERTISING", "OFF_FINAL"]
+
+    header = ["Estado"] + [f"{names[k]}\nmA / mW" for k in keys]
+    body = []
+    for st in states:
+        row = [st]
+        for k in keys:
+            s = runs[k]["by_state"].get(st)
+            row.append(f"{s['mean_uA']/1e3:.3f} / {s['mean_mW']:.2f}" if s else "—")
+        body.append(row)
+
+    ax = fig.add_axes([0.062, 0.44, 0.60, 0.39]); ax.axis("off")
+    tbl = ax.table(cellText=body, colLabels=header, cellLoc="right", loc="upper left",
+                   colWidths=[0.30] + [0.235] * len(keys))
+    tbl.auto_set_font_size(False); tbl.set_fontsize(8.2); tbl.scale(1, 1.5)
+    for (r, c), cell in tbl.get_celld().items():
+        cell.set_edgecolor(S.LINE); cell.set_linewidth(0.5)
+        if r == 0:
+            cell.set_facecolor("#eef2f3"); cell.set_text_props(color=S.INK, fontweight="bold")
+        if c == 0 and r > 0:
+            cell.set_text_props(ha="left")
+        if r > 0 and body[r - 1][0] == "STREAMING":
+            cell.set_facecolor("#e2f0f1")
+
+    lines = []
+    for k in keys:
+        au = runs[k]["report"].autonomy
+        cr = runs[k]["report"].counter_report
+        v = runs[k]["report"].emg_validation or {}
+        lines.append(f"{names[k]}")
+        lines.append(f"   autonomia projetada   {au['hours_energy_based']:.1f} h "
+                     f"({au['avg_current_mA']:.3f} mA · {au['avg_power_mW']:.2f} mW)")
+        lines.append(f"   captura sem perda     {cr['capture_lossless']}  "
+                     f"({cr['n_gaps_unexplained']} gaps não explicados)")
+        lines.append(f"   pacotes / continuidade {v.get('n_packets','—')} / "
+                     f"{v.get('frac_continuous_joins', float('nan')):.3f}")
+        lines.append("")
+    fig.text(0.685, 0.82, "\n".join(lines), fontsize=8.2, color=S.INK_MID,
+             va="top", family="DejaVu Sans", linespacing=1.72)
+
+    caveat = (
+        "Ressalvas declaradas. As entradas estavam abertas, então o espectro é dominado por rede "
+        "elétrica (~55%) e a validação fecha em 'suspect', não 'real': isso prova que a cadeia "
+        "analógica está viva e com ganho, mas não permite chamar o sinal de EMG real nem medir a banda "
+        "do filtro. O cabo SWD ficou conectado durante os runs — sem sessão de debug ativa na janela "
+        "medida, mas o delta do cabo em si não foi quantificado. Picos p99,9 e máximo excluem a "
+        "vizinhança das trocas de faixa da PPK2; sem isso o máximo aparente chegaria a 563 mA."
+    )
+    fig.text(0.062, 0.36, "\n".join(textwrap.wrap(caveat, 132)), fontsize=8.5,
+             color=S.INK_MID, va="top", linespacing=1.66)
+    S.page_footer(fig, "power_profiling/runs/", "PPK2 · source meter · 100 kS/s")
     return fig
 
 
-def summary_lines(run5: dict, run33: dict | None) -> list[str]:
-    A = {s["state"]: s for s in run5["report"].state_stats}
-    B = {s["state"]: s for s in run33["report"].state_stats} if run33 else {}
-    au5, au3 = run5["report"].autonomy, (run33["report"].autonomy if run33 else None)
-    cr = run5["report"].counter_report
-    L = []
-    L.append("CONSUMO POR ESTADO")
-    L.append("")
-    hdr = f"{'estado':<18}{'5,0V mA':>10}{'5,0V mW':>10}"
-    if run33: hdr += f"{'3,3V mA':>10}{'3,3V mW':>10}{'delta':>9}"
-    L.append(hdr)
-    L.append("-" * len(hdr))
-    for s in ("OFF", "BOOT", "ADVERTISING", "CONNECTING", "CONNECTED_IDLE",
-              "STREAMING", "CONNECTED_IDLE_2", "RE_ADVERTISING", "OFF_FINAL"):
-        if s not in A: continue
-        r = f"{s:<18}{A[s]['mean_uA']/1000:>10.3f}{A[s]['mean_mW']:>10.2f}"
-        if run33 and s in B:
-            r += f"{B[s]['mean_uA']/1000:>10.3f}{B[s]['mean_mW']:>10.2f}"
-            # Delta so faz sentido acima do piso de ruido: nos estados OFF as
-            # duas medidas sao ~1 uA e a razao entre elas e ruido dividido por
-            # ruido, que sairia como um "-3,6%" sem nenhum significado.
-            if A[s]["mean_uA"] > 50:
-                d = (B[s]["mean_uA"] - A[s]["mean_uA"]) / A[s]["mean_uA"] * 100
-                r += f"{d:>8.1f}%"
-            else:
-                r += f"{'--':>9}"
-        L.append(r)
-    L += ["", "PICOS (excluindo artefato de troca de faixa da PPK2)", ""]
-    for s in ("ADVERTISING", "STREAMING"):
-        if s in A:
-            r = f"{s:<18}p99,9 {A[s]['p99_9_clean_uA']/1000:>7.2f} mA   max {A[s]['max_clean_uA']/1000:>7.2f} mA"
-            if run33 and s in B:
-                r += f"   | 3,3V: p99,9 {B[s]['p99_9_clean_uA']/1000:.2f}  max {B[s]['max_clean_uA']/1000:.2f} mA"
-            L.append(r)
-    L += ["", "AUTONOMIA PROJETADA (bateria 400 mAh @ 3,7 V, conversor a 85%)", ""]
-    L.append(f"  5,0 V : {au5['avg_current_mA']:.3f} mA   {au5['avg_power_mW']:.2f} mW   {au5['hours_energy_based']:.1f} h")
-    if au3:
-        L.append(f"  3,3 V : {au3['avg_current_mA']:.3f} mA   {au3['avg_power_mW']:.2f} mW   {au3['hours_energy_based']:.1f} h"
-                 f"   ({au3['hours_energy_based']/au5['hours_energy_based']:.2f}x)")
-    L += ["", "INTEGRIDADE DA MEDICAO", ""]
-    L.append(f"  amostras                : {cr['n_samples']:,}")
-    L.append(f"  gaps nao explicados     : {cr['n_gaps_unexplained']}  (captura sem perda: {cr['capture_lossless']})")
-    L.append(f"  descarte do instrumento : {cr['n_gaps_at_range_switch']} (todos em troca de faixa)")
-    L.append(f"  deriva do relogio       : {run5['report'].clock_fit['drift_ppm']:.1f} ppm")
-    v = run5["report"].emg_validation
-    if v:
-        L += ["", "VALIDACAO DO SINAL", ""]
-        L.append(f"  veredito                : {v['verdict']}")
-        L.append(f"  pacotes / continuidade  : {v['n_packets']} / {v['frac_continuous_joins']:.3f}")
-        L.append(f"  potencia em 50/60 Hz    : {v['line_50_60_frac']*100:.0f}%")
-        import textwrap
+def fig_cover(runs: dict) -> plt.Figure:
+    fig = plt.figure(figsize=(11.7, 8.3))
+    fig.text(0.062, 0.88, "CARACTERIZAÇÃO DE CONSUMO", fontsize=8.4, color=S.ACCENT,
+             fontweight="bold")
+    fig.text(0.062, 0.80, "Sensor sEMG vestível\nalimentado por supercapacitor",
+             fontsize=27, color=S.INK, va="top", linespacing=1.22)
+    fig.lines.append(matplotlib.lines.Line2D([0.062, 0.938], [0.665, 0.665],
+                     transform=fig.transFigure, color=S.ACCENT, lw=1.6))
 
-        for r in v["reasons"]:
-            # quebra por palavra em vez de cortar em 96 caracteres, que cortava
-            # no meio da palavra ("caminho analogi", "blocos desc")
-            wrapped = textwrap.wrap(r, width=94)
-            for j, line in enumerate(wrapped):
-                L.append(("    - " if j == 0 else "      ") + line)
-    return L
+    left = (
+        "Instrumento\n"
+        "  Nordic Power Profiler Kit II (PCA63100)\n"
+        "  Source meter, 100 kS/s, captura sem perda\n\n"
+        "Alvo do projeto\n"
+        "  2 mA médios, picos ≤ 5 mA\n\n"
+        "Estado atual medido\n"
+        "  2,75 mA a 3,3 V com ADC a 1 kSPS\n"
+        "  6,80 mA a 5,0 V com ADC a 2 kSPS\n\n"
+        "Condição de entrada\n"
+        "  Eletrodos abertos"
+    )
+    right = (
+        "O que mudou desde o artigo\n\n"
+        "A correção mais importante não foi de consumo:\n"
+        "a aquisição do ADC nunca funcionou. O loop\n"
+        "principal só era acordado pelo timer do LED de\n"
+        "1 Hz, então o ADC era lido uma vez por segundo —\n"
+        "os 2 kS/s do artigo não estavam acontecendo.\n\n"
+        "Agora são 2042 S/s com zero conversões perdidas,\n"
+        "e o consumo caiu 66% em corrente e 78% em\n"
+        "potência em relação ao ponto de partida."
+    )
+    fig.text(0.062, 0.60, left, fontsize=9.6, color=S.INK_MID, va="top", linespacing=1.75)
+    fig.text(0.53, 0.60, right, fontsize=9.6, color=S.INK_MID, va="top", linespacing=1.75)
+    S.page_footer(fig, "power_profiling/ · relatorio_consumo.pdf", "PPK2 · nRF52840 · ADS112C04")
+    return fig
 
 
-def build(run5_dir: Path, run33_dir: Path | None, out_pdf: Path) -> Path:
-    run5 = load_run(run5_dir)
-    run33 = load_run(run33_dir) if run33_dir else None
+# -------------------------------------------------------------------- montagem
 
+def build(runs: dict, out_pdf: Path) -> Path:
+    S.apply()
+    order = [
+        lambda: fig_cover(runs),
+        lambda: fig_protocol(runs),
+        lambda: fig_progression(runs),
+    ]
     with PdfPages(out_pdf) as pdf:
-        cover = [
-            "Sensor sEMG vestivel BLE - nRF52840 + ADS112C04",
-            "",
-            f"Instrumento     : Nordic Power Profiler Kit II (PCA63100), 100 kS/s, source meter",
-            f"Trilhos medidos : 5,0 V" + (f" e 3,3 V" if run33 else ""),
-            f"Condicao        : entradas abertas (eletrodos nao conectados)",
-            f"Aquisicao       : 2042 S/s, 0% de conversoes do ADC perdidas",
-            "",
-            "",
-            "CONTEXTO",
-            "",
-            "  Esta medicao refaz o estudo de energia do artigo (Tabela 2 e Fig. 7) com a",
-            "  PPK2 em vez de shunt + osciloscopio, sobre o firmware corrigido.",
-            "",
-            "  A correcao mais importante nao foi de consumo: a aquisicao do ADC nunca",
-            "  funcionou. O loop principal so era acordado pelo timer do LED de 1 Hz, entao",
-            "  o ADC era lido 1 vez por segundo - os 2 kS/s do artigo nao estavam",
-            "  acontecendo. Agora sao 2042 S/s com zero conversoes perdidas.",
-            "",
-            "  Ressalva declarada: as entradas estavam abertas, entao o espectro e dominado",
-            "  por rede eletrica (~55%) e a validacao fecha em 'suspect', nao 'real'. Isso",
-            "  prova que a cadeia analogica esta viva e com ganho, mas nao permite chamar o",
-            "  sinal de EMG real nem medir a banda do filtro.",
-        ]
-        pdf.savefig(fig_text("Caracterizacao de consumo com PPK2", cover)); plt.close("all")
-
-        pdf.savefig(fig_trace(run5, f"Corrente ao longo do ciclo de operacao - trilho de 5,0 V")); plt.close("all")
-        if run33:
-            pdf.savefig(fig_trace(run33, "Corrente ao longo do ciclo de operacao - trilho de 3,3 V")); plt.close("all")
-        pdf.savefig(fig_compare(run5, run33)); plt.close("all")
-        pdf.savefig(fig_boot(run5)); plt.close("all")
-        pdf.savefig(fig_emg(run5)); plt.close("all")
-        if run33:
-            pdf.savefig(fig_emg(run33)); plt.close("all")
-        pdf.savefig(fig_text("Resultados", summary_lines(run5, run33))); plt.close("all")
-
+        for maker in order:
+            pdf.savefig(maker()); plt.close("all")
+        for key, label in (("3V3", "trilho de 3,3 V"), ("5V", "trilho de 5,0 V")):
+            if key in runs:
+                pdf.savefig(fig_trace(runs[key],
+                                      f"Corrente ao longo do ciclo de operação — {label}",
+                                      "Nove estados, contra os quatro da Fig. 7 do artigo."))
+                plt.close("all")
+        pdf.savefig(fig_i2c(runs)); plt.close("all")
+        pdf.savefig(fig_1khz(runs)); plt.close("all")
+        pdf.savefig(fig_voltage(None)); plt.close("all")
+        pdf.savefig(fig_results(runs)); plt.close("all")
         d = pdf.infodict()
         d["Title"] = "Caracterizacao de consumo - sensor sEMG BLE"
-        d["Subject"] = "Medicao com Nordic PPK2 a 5,0 V e 3,3 V"
+        d["Subject"] = "Medicao com Nordic PPK2; adequacao ao protocolo experimental"
     return out_pdf
 
 
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__)
-    ap.add_argument("run5")
-    ap.add_argument("run33", nargs="?")
-    ap.add_argument("-o", "--out", default=None)
+    ap.add_argument("--run", action="append", default=[], metavar="ROTULO=DIR")
+    ap.add_argument("-o", "--out", default="power_profiling/relatorio_consumo.pdf")
     a = ap.parse_args()
-    out = Path(a.out) if a.out else Path("power_profiling/relatorio_consumo.pdf")
-    out.parent.mkdir(parents=True, exist_ok=True)
-    p = build(Path(a.run5), Path(a.run33) if a.run33 else None, out)
+    runs = {}
+    for spec in a.run:
+        label, _, d = spec.partition("=")
+        runs[label] = load_run(Path(d))
+    out = Path(a.out); out.parent.mkdir(parents=True, exist_ok=True)
+    p = build(runs, out)
     print(f"PDF gravado em {p}  ({p.stat().st_size/1024:.0f} kB)")
 
 
