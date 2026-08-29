@@ -48,6 +48,11 @@ COUNTERS = [
     ("g_adc_fail_count", 4, False),
     ("g_adc_ok_count", 4, False),
     ("g_loop_count", 4, False),
+    # aquisicao sob demanda: o ADC entra em power-down quando nao ha conexao
+    ("g_acq_running", 4, False),
+    ("g_acq_start_count", 4, False),
+    ("g_acq_stop_count", 4, False),
+    ("g_acq_error_count", 4, False),
 ]
 
 RATE_COUNTERS = [
@@ -184,7 +189,20 @@ def main() -> None:
         d_loop = snap2.get("g_loop_count", 0) - snap1.get("g_loop_count", 0)
         d_adc = snap2.get("g_adc_ok_count", 0) - snap1.get("g_adc_ok_count", 0)
         d_drdy = snap2.get("g_drdy_count", 0) - snap1.get("g_drdy_count", 0)
-        print(f"\n  loop principal vivo: {'SIM' if d_loop > 0 else 'NAO'}")
+
+        # Distinguir "aquisicao pausada de proposito" de "firmware travado" e
+        # essencial: nos dois casos o loop quase nao avanca e o ADC nao entrega
+        # nada. Sem essa checagem, o power-down intencional pareceria o bug de
+        # 1 amostra/s que existia antes.
+        acq = snap2.get("g_acq_running")
+        if acq == 0:
+            print("\n  aquisicao: EM POWER-DOWN (esperado sem conexao BLE)")
+            print(f"  loop principal vivo: {'SIM' if d_loop > 0 else 'dormindo (normal neste estado)'}")
+            print(f"  start/stop/erros: {snap2.get('g_acq_start_count')} / "
+                  f"{snap2.get('g_acq_stop_count')} / {snap2.get('g_acq_error_count')}")
+            return
+        print(f"\n  aquisicao: ATIVA")
+        print(f"  loop principal vivo: {'SIM' if d_loop > 0 else 'NAO'}")
         print(f"  ADC entregando dado: {'SIM' if d_adc > 0 else 'NAO'}")
         print(f"  taxa de amostragem efetiva: {d_adc / args.watch:.1f} S/s")
         if d_drdy > 0:

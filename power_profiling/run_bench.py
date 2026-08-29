@@ -28,13 +28,30 @@ from ppk2_stream import Ppk2Stream, StreamConfig
 from timeline import Clock, EventLog
 
 
-def default_plan(quick: bool = False) -> list[tuple[config.State, float]]:
+def default_plan(
+    quick: bool = False,
+    overrides: dict[str, float] | None = None,
+) -> list[tuple[config.State, float]]:
     """Sequência de estados e durações. `quick=True` encolhe tudo pra
     segundos, só para validar a sequenciação/teardown sem gastar minutos
-    reais de captura."""
+    reais de captura.
+
+    `overrides` permite alongar bandas específicas sem editar config.py - útil
+    porque a estatística de RMS do pior caso (conectado + streaming) melhora
+    com janela longa, e CONNECTED_IDLE estava curto (10 s) só por causa do bug
+    de overflow de packet_index, que já foi corrigido.
+    """
     durations = dict(config.DEFAULT_BAND_DURATIONS_S)
     if quick:
         durations = {k: (2.0 if v > 0 else 0.0) for k, v in durations.items()}
+    for name, secs in (overrides or {}).items():
+        try:
+            durations[config.State(name)] = secs
+        except ValueError as e:
+            raise SystemExit(
+                f"estado desconhecido em --duration: {name!r}. "
+                f"Validos: {', '.join(s.value for s in config.State)}"
+            ) from e
     return [(s, durations[s]) for s in config.State]
 
 
@@ -296,6 +313,11 @@ def main() -> None:
     parser.add_argument("--voltage-mv", type=int, default=config.SOURCE_MV_DEFAULT)
     parser.add_argument("--out", default="power_profiling/runs")
     parser.add_argument("--quick", action="store_true", help="plano curto so p/ testar a sequenciacao")
+    parser.add_argument(
+        "--duration", action="append", default=[], metavar="ESTADO=SEGUNDOS",
+        help="sobrescreve a duracao de uma banda (repetivel). "
+             "Ex: --duration STREAMING=120 --duration CONNECTED_IDLE=60",
+    )
     parser.add_argument("--cycles", type=int, default=1)
     parser.add_argument("--no-gain-sweep", action="store_true")
     parser.add_argument(
@@ -311,7 +333,13 @@ def main() -> None:
     out_dir = Path(args.out) / run_id
 
     cfg = StreamConfig(port=args.port, source_mv=args.voltage_mv)
-    plan = default_plan(quick=args.quick)
+    overrides = {}
+    for spec in args.duration:
+        name, _, secs = spec.partition("=")
+        if not secs:
+            raise SystemExit(f"--duration espera ESTADO=SEGUNDOS, recebi {spec!r}")
+        overrides[name.strip().upper()] = float(secs)
+    plan = default_plan(quick=args.quick, overrides=overrides)
 
     asyncio.run(
         run_bench(

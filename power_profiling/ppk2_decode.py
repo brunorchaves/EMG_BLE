@@ -229,17 +229,74 @@ def decode_words(
     )
 
 
-def _apply_spike_filter(current_uA: np.ndarray, range_idx: np.ndarray, alpha: float = 0.18) -> np.ndarray:
-    """Réplica simplificada, vetorizável a posteriori, do filtro de exibição
-    do app oficial - só para fins de comparação (ver decode_words)."""
-    out = current_uA.copy()
+def _apply_spike_filter(
+    current_uA: np.ndarray,
+    range_idx: np.ndarray,
+    alpha_fast: float = 0.18,
+    alpha_slow: float = 0.06,
+    n_after: int = 3,
+) -> np.ndarray:
+    """Filtro de spike da PPK2, fiel ao algoritmo da lib oficial da Nordic.
+
+    A PPK2 troca a faixa de medicao quando a corrente muda de ordem de
+    grandeza, e nas amostras imediatamente seguintes a transicao o valor lido
+    e artefato de acomodacao - foi assim que um run desta bancada chegou a
+    reportar 563 mA numa placa que fisicamente nao passa de ~30 mA.
+
+    O algoritmo oficial (PPK2_API.get_adc_result) mantem duas medias moveis
+    exponenciais CAUSAIS rodando sobre todas as amostras e, nas ``n_after``
+    amostras a partir de cada troca de faixa, SUBSTITUI a leitura pela EMA em
+    vez de descartar a amostra.
+
+    Isso importa muito e foi a origem de um erro real nesta bancada: a versao
+    anterior desta funcao misturava cada janela de transicao com a media da
+    PROPRIA janela - que contem o artefato -, entao retinha parte dele. E uma
+    tentativa alternativa de simplesmente DESCARTAR +-3 amostras em torno de
+    cada troca removia 14-27% do registro, sistematicamente as amostras altas
+    (as trocas de faixa sao CAUSADAS pelos picos reais de corrente), enviesando
+    a media em -27%. Substituir pela EMA causal nao descarta tempo e nao usa o
+    artefato como referencia.
+    """
+    x = current_uA.astype(np.float64, copy=False)
+
+    # EMA causal: y[n] = a*x[n] + (1-a)*y[n-1], primeira amostra inicializa em x[0]
+    def _ema(a: float) -> np.ndarray:
+        y = np.empty_like(x)
+        y[0] = x[0]
+        coef = 1.0 - a
+        # forma fechada equivalente a lfilter, mas sem depender de scipy aqui
+        # (este modulo e deliberadamente numpy-only)
+        acc = x[0]
+        for i in range(1, len(x)):
+            acc = a * x[i] + coef * acc
+            y[i] = acc
+        return y
+
+    try:
+        from scipy.signal import lfilter  # muito mais rapido em arrays de 12 M
+
+        def _ema(a: float) -> np.ndarray:  # noqa: F811
+            zi = np.array([(1.0 - a) * x[0]])
+            y, _ = lfilter([a], [1.0, -(1.0 - a)], x, zi=zi)
+            return y
+    except ImportError:
+        pass
+
+    ema_fast = _ema(alpha_fast)
+    ema_slow = _ema(alpha_slow)
+
+    # marca n_after amostras a partir de cada troca de faixa (inclusive a da troca)
+    flag = np.zeros(len(x), dtype=bool)
     switches = np.flatnonzero(np.diff(range_idx.astype(np.int16)) != 0) + 1
-    for idx in switches:
-        lo = max(0, idx - 1)
-        hi = min(len(out), idx + 3)
-        window = out[lo:hi]
-        avg = window.mean()
-        out[lo:hi] = alpha * window + (1 - alpha) * avg
+    for off in range(n_after):
+        idx = switches + off
+        flag[idx[idx < len(x)]] = True
+
+    out = x.copy()
+    # faixa 4 (a de maior corrente) usa a EMA mais lenta, como na lib oficial
+    in_r4 = range_idx == 4
+    out[flag & ~in_r4] = ema_fast[flag & ~in_r4]
+    out[flag & in_r4] = ema_slow[flag & in_r4]
     return out
 
 

@@ -22,3 +22,7 @@ Thumbs.db
 
 # Notificacao de Invencao (contem dados pessoais dos inventores - CPF, RG, endereco)
 Notificacao-de-Invencao-UFMG*.docx
+
+# Export do ensaio: os CSV decimados e metadados sao pequenos e versionaveis,
+# mas o .npy de resolucao cheia (100 kS/s) chega a dezenas de MB
+power_profiling/runs/**/export/*_full_uA.npy

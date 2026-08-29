@@ -56,6 +56,14 @@ class StateStats:
     p99_9_clean_uA: float = float("nan")
     max_clean_uA: float = float("nan")
     n_samples_clean: int = 0
+    # Estatisticas do sinal BRUTO (sem spike filter), para expor a
+    # sensibilidade metodologica: o RMS pondera os extremos ao quadrado, e e
+    # justamente nos extremos que vivem os artefatos de troca de faixa. Medido
+    # nesta bancada, o RMS da janela conectado+streaming vai de 3,85 mA
+    # (filtrado) a 5,60 mA (bruto) - a media, por outro lado, varia so ~7,7%.
+    mean_raw_uA: float = float("nan")
+    rms_raw_uA: float = float("nan")
+    max_raw_uA: float = float("nan")
     flags: list[str] = field(default_factory=list)
 
 
@@ -117,6 +125,7 @@ def per_state_stats(
     logic: np.ndarray | None = None,
     counter_report: CounterReport | None = None,
     range_idx: np.ndarray | None = None,
+    uA_raw: np.ndarray | None = None,
 ) -> list[StateStats]:
     switch_mask = _range_switch_mask(range_idx) if range_idx is not None else None
     out = []
@@ -155,6 +164,14 @@ def per_state_stats(
                 p999_clean = float(np.percentile(clean, 99.9))
                 max_clean = float(clean.max())
 
+        mean_raw = rms_raw = max_raw = float("nan")
+        if uA_raw is not None:
+            r = uA_raw[lo:hi].astype(np.float64)
+            if len(r):
+                mean_raw = float(r.mean())
+                rms_raw = float(np.sqrt(np.mean(r**2)))
+                max_raw = float(r.max())
+
         flags = []
         if has_gap:
             flags.append("descontinuidade_do_contador_na_banda")
@@ -189,6 +206,9 @@ def per_state_stats(
                 p99_9_clean_uA=p999_clean,
                 max_clean_uA=max_clean,
                 n_samples_clean=n_clean,
+                mean_raw_uA=mean_raw,
+                rms_raw_uA=rms_raw,
+                max_raw_uA=max_raw,
                 flags=flags,
             )
         )
@@ -312,7 +332,7 @@ def project_autonomy(
     )
 
 
-def analyze_run(run_dir: Path, spike_filter: bool = False, guard_s: float = 0.25) -> RunReport:
+def analyze_run(run_dir: Path, spike_filter: bool = True, guard_s: float = 0.25) -> RunReport:
     run_dir = Path(run_dir)
     meta = json.loads((run_dir / "run_meta.json").read_text(encoding="utf-8"))
     calib = meta["ppk2_calibration"]
@@ -329,7 +349,11 @@ def analyze_run(run_dir: Path, spike_filter: bool = False, guard_s: float = 0.25
         ((w >> 18) & 0x3F).astype(np.uint8),
         range_idx=((w >> 14) & 0x07).astype(np.uint8),
     )
+    # Decodifica DUAS vezes de proposito: o sinal filtrado e a base das
+    # estatisticas reportadas (metodo da propria Nordic), e o bruto fica
+    # disponivel para expor a sensibilidade do RMS ao tratamento de artefato.
     block = decode_words(w, calib, source_v, spike_filter=spike_filter)
+    block_raw = decode_words(w, calib, source_v, spike_filter=False) if spike_filter else block
 
     log = EventLog.from_jsonl(run_dir / "events.jsonl")
     seq = [s.value for s in config.State]
@@ -343,6 +367,7 @@ def analyze_run(run_dir: Path, spike_filter: bool = False, guard_s: float = 0.25
         block.logic,
         counter_report,
         range_idx=block.range_idx,
+        uA_raw=block_raw.current_uA,
     )
 
     warnings: list[str] = list(counter_report.reasons)
