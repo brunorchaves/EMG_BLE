@@ -92,6 +92,42 @@ def _slices(bands, states, fs) -> list[tuple[int, int, str]]:
     return out
 
 
+def band_warnings(bands, states, fs, uA, tol: float = 0.15) -> list[str]:
+    """Avisos sobre bandas cujo rotulo nao corresponde ao estado medido.
+
+    Hoje detecta um caso concreto e ja observado: RE_ADVERTISING com o link
+    ainda de pe. As duas bandas de advertising tem de custar o mesmo; se
+    divergirem, uma delas nao e o estado que o nome diz.
+    """
+    def band_mean(state: str) -> float | None:
+        sl = _slices(bands, (state,), fs)
+        if not sl:
+            return None
+        seg = np.concatenate([uA[lo:hi].astype(np.float64) for lo, hi, _ in sl])
+        return float(seg.mean()) if seg.size else None
+
+    if not {"ADVERTISING", "RE_ADVERTISING"} <= set(states):
+        return []
+    a, r = band_mean("ADVERTISING"), band_mean("RE_ADVERTISING")
+    if a is None or r is None or a <= 0:
+        return []
+    dev = (r - a) / a
+    if abs(dev) <= tol:
+        return []
+    return [
+        "ATENCAO - a banda RE_ADVERTISING nao mede advertising: o link BLE",
+        "continuou de pe. O central no Windows nao derruba a conexao ao chamar",
+        "disconnect() - a sessao so cai quando o processo do central termina, e",
+        "o programa de medicao nao pode terminar (ele mantem o stream da PPK2).",
+        "Diagnostico pela cadencia dos picos de radio: 197 ms (anuncio) na banda",
+        "ADVERTISING contra 97 ms (intervalo de conexao) na suspeita.",
+        "  ADVERTISING    {:.3f} mA   <- esta banda e valida".format(a / 1000),
+        "  RE_ADVERTISING {:.3f} mA   <- mediu o estado CONECTADO ({:+.0f}%)".format(
+            r / 1000, dev * 100),
+        "Ao sombrear o grafico por estado, trate RE_ADVERTISING como conectado.",
+    ]
+
+
 def export_window(
     run_dir: Path,
     name: str,
@@ -105,6 +141,7 @@ def export_window(
     if not sl:
         raise SystemExit("janela " + repr(name) + " nao tem nenhuma banda no run")
 
+    warns = band_warnings(bands, states, fs, blk.current_uA)
     cur = np.concatenate([blk.current_uA[lo:hi].astype(np.float64) for lo, hi, _ in sl])
     cur_raw = np.concatenate([raw.current_uA[lo:hi].astype(np.float64) for lo, hi, _ in sl])
     # etiqueta de estado por amostra, para o CSV dizer de onde veio cada ponto
@@ -132,6 +169,7 @@ def export_window(
                     for lo, hi, st in sl
                 ],
                 "spike_filter": "aplicado (metodo da Nordic)",
+                "avisos": warns,
                 "nota": (
                     "tempo da amostra i = i/fs_hz, contiguo dentro de cada banda; "
                     "as bandas foram concatenadas, entao ha descontinuidade de tempo "
@@ -175,6 +213,8 @@ def export_window(
             full_mean, full_rms
         ),
     ]
+    if warns:
+        header += ["#"] + ["# " + w for w in warns]
 
     csv_path = out_dir / (name + "_" + str(int(decim_hz)) + "Hz.csv")
     with csv_path.open("w", encoding="utf-8", newline="") as f:
