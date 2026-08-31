@@ -63,7 +63,7 @@ def load(run_dir: Path) -> dict:
     # ENTREGA pelo BLE - que e um PISO da de aquisicao (blocos descartados so
     # subtraem). Rotulamos qual das duas e, para nao apresentar um piso como se
     # fosse a taxa do ADC.
-    fs_acq, fs_src = None, "aquisicao"
+    fs_acq, fs_src = None, "aquisição"
     fwc = run_dir / "fw_counters.json"
     if fwc.exists():
         fs_acq = json.loads(fwc.read_text(encoding="utf-8")).get("fs_acquisition_sps")
@@ -120,10 +120,13 @@ def fig_cover(run: dict) -> plt.Figure:
         "  e desconectada, que puxam a média para baixo\n"
         "  e mascaram o consumo real de uso."
     )
+    adv = run["by_state"].get("ADVERTISING", {}).get("mean_uA")
     right = (
         "Medido nesta configuração\n"
         f"  Trilho: {run['source_v']:.1f} V"
-        f"     ADC: {run['fs_acq'] or 0:.0f} S/s ({run['fs_src']})\n\n"
+        f"     ADC: {run['fs_acq'] or 0:.0f} S/s ({run['fs_src']})\n"
+        "  Firmware: com power-down do ADC quando\n"
+        "  desconectado — mudou desde o número antigo\n\n"
         f"  Todas as etapas\n"
         f"     média {todas.get('mean_mA', float('nan')):.3f} mA"
         f"     RMS {todas.get('rms_mA', float('nan')):.3f} mA\n\n"
@@ -136,6 +139,19 @@ def fig_cover(run: dict) -> plt.Figure:
         " na média."
     )
     fig.text(0.062, 0.60, left, fontsize=9.6, color=S.INK_MID, va="top", linespacing=1.75)
+
+    # De onde vem a diferenca entre o numero antigo e este. Sem isso, quem
+    # comparar 2,75 com 2,65 conclui que quase nada mudou - quando na verdade
+    # mudaram tres coisas ao mesmo tempo, em direcoes diferentes.
+    if adv:
+        decomp = (
+            "Por que os números mudaram, item por item (banda ADVERTISING)\n"
+            "  2.75 mA   o valor antigo, sem tratar o artefato da PPK2\n"
+            "  2.52 mA   o mesmo dado, com o spike filter do fabricante\n"
+            f"  {adv / 1000:.2f} mA   este run, com o power-down do ADC (novo)"
+        )
+        fig.text(0.062, 0.225, decomp, fontsize=9.0, color=S.INK_MID, va="top",
+                 linespacing=1.75, family="DejaVu Sans")
     fig.text(0.53, 0.60, right, fontsize=9.6, color=S.INK_MID, va="top", linespacing=1.75)
     S.page_footer(fig, run["dir"].name, "PPK2 · source meter · 100 kS/s")
     return fig
