@@ -151,8 +151,9 @@ def fig_trace(run: dict, title: str, subtitle: str) -> plt.Figure:
 
     note = (
         "Envelope min–max por coluna de pixel, não subamostragem: nenhum transiente é perdido.\n"
-        "Artefatos das trocas de faixa de medição da PPK2 removidos — sem isso o máximo aparente\n"
-        "chegaria a 563 mA, fisicamente impossível nesta placa."
+        "Artefatos de troca de faixa da PPK2 tratados pelo spike filter do fabricante, que\n"
+        "SUBSTITUI as 3 amostras seguintes a cada troca por uma média móvel causal em vez de\n"
+        "descartá-las — descartar removia 14 a 27% do registro e enviesava a média em −27%."
     )
     fig.text(0.075, 0.15, note, fontsize=8, color=S.INK_SOFT, va="top", linespacing=1.6)
     S.page_footer(fig, run["dir"].name, f"{run['source_v']:.1f} V · {run['fs_acq'] or 0:.0f} S/s")
@@ -162,15 +163,20 @@ def fig_trace(run: dict, title: str, subtitle: str) -> plt.Figure:
 def fig_progression(runs: dict) -> plt.Figure:
     """Progressao do consumo ao longo das otimizacoes, com a meta marcada."""
     fig = plt.figure(figsize=(11.7, 8.3))
-    S.page_header(fig, "progressão", "De 8,15 mA para 2,75 mA",
+    S.page_header(fig, "progressão", "De 8,15 mA para 1,60 mA",
                   "Cada barra é uma medição completa, não uma estimativa.")
     ax = fig.add_axes([0.10, 0.44, 0.84, 0.40])
 
+    # Da segunda barra em diante os valores vem do spike filter da Nordic. A
+    # primeira e de uma medicao anterior a essa correcao e por isso fica ~3,5%
+    # alta: a comparacao segue valida (o vies e muito menor que os passos), mas
+    # nao e homogenea.
     steps = [
         ("Original\n5 V, LED aceso\naquisição quebrada", 8.148, 40.74, S.BEFORE),
-        ("LED e UART off\n5 V", 6.804, 34.02, S.BEFORE),
-        ("Trilho 3,3 V", 4.367, 14.41, S.ACCENT_LT),
-        ("3,3 V + ADC 1 kSPS", 2.750, 9.10, S.ACCENT),
+        ("LED e UART off\n5 V", 6.575, 32.87, S.BEFORE),
+        ("Trilho 3,3 V", 3.940, 13.00, S.ACCENT_LT),
+        ("3,3 V + ADC 1 kSPS", 2.531, 8.35, S.ACCENT_LT),
+        ("+ power-down do ADC\nquando desconectado", 1.601, 5.28, S.ACCENT),
     ]
     x = np.arange(len(steps))
     vals = [s[1] for s in steps]
@@ -194,8 +200,10 @@ def fig_progression(runs: dict) -> plt.Figure:
     ax.set_ylim(0, max(vals) * 1.15)
 
     txt = (
-        "A queda total é de 66% na corrente e 78% na potência. O último passo (ADC a 1 kSPS) tem\n"
-        "custo de qualidade de sinal e está descrito na página seguinte — não é ganho gratuito."
+        f"A queda total é de {(1 - steps[-1][1] / steps[0][1]) * 100:.0f}% na corrente e "
+        f"{(1 - steps[-1][2] / steps[0][2]) * 100:.0f}% na potência. O passo do ADC a 1 kSPS\n"
+        "tem custo de qualidade de sinal, descrito na página seguinte — não é ganho gratuito.\n"
+        "O power-down do ADC não tem: ele só age quando não há ninguém consumindo as amostras."
     )
     fig.text(0.10, 0.30, txt, fontsize=8.6, color=S.INK_MID, va="top", linespacing=1.7)
     S.page_footer(fig, "medições a 3,3 V e 5,0 V", "PPK2 · 100 kS/s")
@@ -256,7 +264,7 @@ def fig_i2c(runs: dict) -> plt.Figure:
         ("O que os picos realmente são",
          "Medido: 1950 picos/s a 2 kSPS e 1004 picos/s a 1 kSPS — um por conversão, largura mediana de "
          "20 µs. A amplitude não muda (20,0 → 19,8 mA). Não é o rádio: entre ADVERTISING e STREAMING a "
-         "diferença de média é de apenas 0,48 mA, com o link entregando 32 pacotes/s."),
+         "diferença de média é de apenas 0,25 mA a 1 kSPS (0,46 mA a 2 kSPS), com o link entregando 17 e 32 pacotes/s respectivamente."),
         ("Como resolver",
          "Cada pico move ~0,4 µC. Para manter o trilho dentro de 10 mV basta C = Q/ΔV ≈ 44 µF de "
          "capacitância local — um bulk de 47–100 µF junto à carga absorve os pulsos, e a fonte "
@@ -317,28 +325,27 @@ def fig_1khz(runs: dict) -> plt.Figure:
 
     body = [
         ("O que se ganha",
-         "Medido a 3,3 V: ADVERTISING 4,37 → 2,75 mA (−37,0%), STREAMING 4,85 → 2,99 mA (−38,5%). "
-         "Potência média 14,46 → 9,10 mW; autonomia projetada 87 → 138 h. Vem de três fontes: o ADC "
+         "Medido a 3,3 V: ADVERTISING 3,92 → 2,52 mA (−35,7%), STREAMING 4,43 → 2,77 mA (−37,5%). "
+         "Potência média 13,00 → 8,35 mW; autonomia projetada 97 → 151 h. Vem de três fontes: o ADC "
          "sai do modo turbo (que dobra o clock interno do modulador), as transações I²C caem pela "
          "metade, e o rádio transmite metade dos blocos."),
         ("O que se perdia, e já foi corrigido",
-         "Os coeficientes do Butterworth dependem da taxa, e existia apenas o conjunto de fs = 2000 Hz: "
-         "rodando a 1000 SPS com ele, a banda de 20–400 Hz virava 10–200 Hz em silêncio (energia em "
-         "200–400 Hz caindo de 2,1% para 0,2%, joelho do piso de ruído em ~223 Hz). Os coeficientes de "
-         "1 kHz foram gerados com mkfilter e verificados numericamente — cortes de −3 dB em exatamente "
-         "20,0 e 400,0 Hz. Com eles a energia volta a 2,4% e o joelho vai para ~456 Hz. Os dois "
-         "conjuntos agora são escolhidos pelo mesmo flag que define a taxa, e não podem dessincronizar."),
+         "Os coeficientes do Butterworth dependem da taxa, e só existia o conjunto de fs = 2000 Hz: a "
+         "1000 SPS a banda de 20–400 Hz virava 10–200 Hz em silêncio (energia em 200–400 Hz caindo de "
+         "2,1% para 0,2%). Os de 1 kHz foram gerados com mkfilter e verificados: −3 dB em exatamente "
+         "20,0 e 400,0 Hz, energia de volta a 2,4%. Os dois conjuntos são escolhidos pelo mesmo flag "
+         "que define a taxa, e não podem dessincronizar."),
         ("Correção de uma análise anterior: o anti-aliasing não é problema",
          "Uma versão anterior deste relatório tratava o Sallen-Key de 2ª ordem em 482 Hz como "
-         "anti-aliasing insuficiente para Nyquist de 500 Hz. Está errado: o ADS112C04 é delta-sigma, e "
-         "seu filtro digital interno atenua de fDR/2 até fMOD. O analógico só precisa bloquear perto de "
-         "fMOD, onde tem ~109 dB de folga em 256 kHz. Mantê-lo como está é correto nas duas taxas."),
+         "anti-aliasing insuficiente. Está errado: o ADS112C04 é delta-sigma e seu filtro digital "
+         "interno atenua de fDR/2 até fMOD, então o analógico só precisa bloquear perto de fMOD, onde "
+         "há ~109 dB de folga. Mantê-lo como está é correto nas duas taxas."),
         ("A decisão que sobra",
-         "A 1 kSPS a banda de 30–400 Hz do artigo é preservada; muda só a taxa, de 2 kS/s para "
-         "1 kS/s — Nyquist de 500 Hz para banda de 400 Hz, margem de 25%, apertada mas legítima. "
-         "Aceitar isso como especificação publicada rende 37%. Default do firmware: 2 kSPS."),
+         "A 1 kSPS a banda de 30–400 Hz é preservada; muda só a taxa, de 2 para 1 kS/s — Nyquist "
+         "de 500 Hz para banda de 400 Hz, margem de 25%: apertada mas legítima. O default do "
+         "firmware passou a ser 1 kSPS (ADS_TURBO_MODE 0)."),
     ]
-    _text_blocks(fig, body, y0=0.435)
+    _text_blocks(fig, body, y0=0.442, size=8.2)
     S.page_footer(fig, "ADS_TURBO_MODE em ADS112C04.h", "coeficientes gerados com mkfilter")
     return fig
 
@@ -398,6 +405,19 @@ def fig_voltage(sweep_csv: Path | None) -> plt.Figure:
         elif r >= 6:
             cell.set_text_props(color=S.INK_SOFT)
 
+    # Esta varredura e de uma medicao anterior a duas mudancas: o spike filter
+    # (que baixa as medias ~3,5%) e o power-down do ADC (que baixa o
+    # ADVERTISING ~39%). Os numeros seguem validos para a pergunta desta
+    # pagina - onde o ganho de tensao satura -, mas nao sao comparaveis com a
+    # pagina de progressao. Dizer isso e mais honesto que renumerar sem
+    # remedir.
+    tb.text(0.0, -0.10,
+            "Varredura medida sem o spike filter (~3,5% alta) e com o firmware\n"
+            "anterior ao power-down do ADC. Serve para localizar onde o ganho de\n"
+            "tensão satura, não para comparar com a página de progressão.",
+            transform=tb.transAxes, fontsize=7.0, color=S.INK_SOFT,
+            va="top", linespacing=1.5)
+
     body = (
         "A corrente para de cair abaixo de ~3,0 V e chega a subir: é o regulador do módulo entrando em "
         "dropout, com o trilho do nRF já não regulado. Ou seja, o ganho de potência satura em torno de "
@@ -423,18 +443,21 @@ def fig_protocol(runs: dict) -> plt.Figure:
 
     rows = [
         ("Requisito do protocolo", "Situação", "Observação"),
-        ("Estado Standby", "parcial",
-         "Nosso ADVERTISING não é standby: a aquisição roda a 2 kS/s mesmo desconectado"),
+        ("Estado Standby", "coberto",
+         "ADVERTISING com o ADC em power-down: 1,54 mA, validado por contador"),
         ("Estado Medição (sem BLE)", "faltando",
          "Exige um build com o rádio desligado; não medido isoladamente"),
         ("Estado Transmissão (sem aquisição)", "faltando",
-         "Exige parar o ADC; ads112c04_powerdown() existe e nunca é chamado"),
+         "Sem aquisição não há o que transmitir; o power-down cobre o inverso"),
         ("Estado Medição + Bluetooth", "coberto", "= nosso STREAMING"),
-        ("Corrente média / mín / máx", "coberto", "Picos com artefato de faixa removido"),
+        ("Corrente média / mín / máx", "coberto",
+         "Artefato de faixa tratado pelo spike filter; pico pelo p99,9"),
         ("Tensão de alimentação", "coberto", "5,0 V, 3,3 V e varredura de 5,0 a 2,0 V"),
-        ("Frequência de aquisição", "coberto", "2042 S/s medidos por contador no firmware"),
+        ("Frequência de aquisição", "coberto",
+         "1015 S/s a 1 kSPS, 2042 S/s em turbo, por contador no firmware"),
         ("Resolução do ADC", "coberto", "16 bits"),
-        ("Taxa de transmissão / pacotes", "coberto", "32 pacotes/s de 120 B"),
+        ("Taxa de transmissão / pacotes", "coberto",
+         "17 pacotes/s de 120 B a 1 kSPS (32/s em turbo), sem blocos perdidos"),
         ("Energia consumida", "coberto", "Carga e energia por estado, em µC e µJ"),
         ("Tensão mínima de operação", "coberto", "2,7 V em spec; roda até 2,0 V fora de spec"),
         ("Autonomia estimada", "coberto", "Bateria; falta a curva de descarga do supercapacitor"),
@@ -457,12 +480,14 @@ def fig_protocol(runs: dict) -> plt.Figure:
                 cell.set_text_props(color=status_col.get(st, S.INK), fontweight="bold")
 
     note = (
-        "A lacuna estrutural é a mesma nos três primeiros itens: o firmware nunca para a aquisição, "
-        "então não existe um estado em que só o rádio ou só o ADC esteja ativo. O protocolo pede "
-        "justamente essa separação para atribuir consumo por subsistema (Nível 1 — Subsistemas). "
-        "Uma aproximação foi obtida pelo transiente de partida: 2,69 mA antes do ADC ser configurado "
-        "contra 6,81 mA em regime, a 5 V, o que atribui ~4,1 mA à aquisição. Para fechar o Ensaio 1 "
-        "como escrito, bastam dois builds de diagnóstico: um sem rádio e um com ads112c04_powerdown()."
+        "A lacuna estrutural que restou é a de isolar o rádio: o firmware não tem um build sem BLE, "
+        "então não há como medir o ADC sem o rádio ligado. O protocolo pede essa separação para "
+        "atribuir consumo por subsistema (Nível 1 — Subsistemas). "
+        "Para o ADC essa lacuna FOI FECHADA: com o power-down implementado, ADVERTISING (ADC dormindo) e "
+        "CONNECTED (ADC convertendo) diferem apenas pela aquisição — 1,536 contra 2,487 mA a 3,3 V e "
+        "1 kSPS, ou seja 0,95 mA de aquisição, medido e não estimado. Antes havia só a aproximação pelo "
+        "transiente de partida (2,69 mA antes de configurar o ADC contra 6,81 mA em regime, a 5 V, "
+        "atribuindo ~4,1 mA). Falta o build sem rádio para isolar o outro subsistema."
     )
     fig.text(0.062, 0.255, "\n".join(textwrap.wrap(note, 132)), fontsize=8.7,
              color=S.INK_MID, va="top", linespacing=1.66)
@@ -473,9 +498,10 @@ def fig_protocol(runs: dict) -> plt.Figure:
 def fig_results(runs: dict) -> plt.Figure:
     fig = plt.figure(figsize=(11.7, 8.3))
     S.page_header(fig, "resultados", "Tabela consolidada",
-                  "Três configurações medidas, mesma sequência de nove estados.")
-    keys = [k for k in ("5V", "3V3", "3V3_1kSPS") if k in runs]
-    names = {"5V": "5,0 V · 2 kSPS", "3V3": "3,3 V · 2 kSPS", "3V3_1kSPS": "3,3 V · 1 kSPS"}
+                  "Quatro configurações medidas, mesma sequência de nove estados.")
+    keys = [k for k in ("5V", "3V3", "3V3_1kSPS", "3V3_1kSPS_pd") if k in runs]
+    names = {"5V": "5,0 V · 2 kSPS", "3V3": "3,3 V · 2 kSPS",
+             "3V3_1kSPS": "3,3 V · 1 kSPS", "3V3_1kSPS_pd": "3,3 V · 1 kSPS\n+ power-down"}
     states = ["OFF", "BOOT", "ADVERTISING", "CONNECTING", "CONNECTED_IDLE",
               "STREAMING", "CONNECTED_IDLE_2", "RE_ADVERTISING", "OFF_FINAL"]
 
@@ -488,9 +514,9 @@ def fig_results(runs: dict) -> plt.Figure:
             row.append(f"{s['mean_uA']/1e3:.3f} / {s['mean_mW']:.2f}" if s else "—")
         body.append(row)
 
-    ax = fig.add_axes([0.062, 0.44, 0.60, 0.39]); ax.axis("off")
+    ax = fig.add_axes([0.062, 0.50, 0.876, 0.33]); ax.axis("off")
     tbl = ax.table(cellText=body, colLabels=header, cellLoc="right", loc="upper left",
-                   colWidths=[0.30] + [0.235] * len(keys))
+                   colWidths=[0.22] + [0.195] * len(keys))
     tbl.auto_set_font_size(False); tbl.set_fontsize(8.2); tbl.scale(1, 1.5)
     for (r, c), cell in tbl.get_celld().items():
         cell.set_edgecolor(S.LINE); cell.set_linewidth(0.5)
@@ -500,6 +526,11 @@ def fig_results(runs: dict) -> plt.Figure:
             cell.set_text_props(ha="left")
         if r > 0 and body[r - 1][0] == "STREAMING":
             cell.set_facecolor("#e2f0f1")
+    # o rotulo da config com power-down tem tres linhas e nao caberia na altura
+    # padrao do cabecalho, que e dimensionada para uma so
+    for c in range(len(header)):
+        h0 = tbl[(0, c)].get_height()
+        tbl[(0, c)].set_height(h0 * 1.9)
 
     lines = []
     for k in keys:
@@ -514,18 +545,25 @@ def fig_results(runs: dict) -> plt.Figure:
         lines.append(f"   pacotes / continuidade {v.get('n_packets','—')} / "
                      f"{v.get('frac_continuous_joins', float('nan')):.3f}")
         lines.append("")
-    fig.text(0.685, 0.82, "\n".join(lines), fontsize=8.2, color=S.INK_MID,
-             va="top", family="DejaVu Sans", linespacing=1.72)
+    # em duas colunas: com quatro configuracoes uma coluna unica nao cabe
+    half = (len(lines) + 1) // 2
+    # nao cortar no meio de um bloco de 5 linhas (titulo + 3 dados + branco)
+    while half < len(lines) and lines[half - 1] != "":
+        half += 1
+    for x, chunk in ((0.062, lines[:half]), (0.52, lines[half:])):
+        fig.text(x, 0.455, "\n".join(chunk), fontsize=7.8, color=S.INK_MID,
+                 va="top", family="DejaVu Sans", linespacing=1.66)
 
     caveat = (
         "Ressalvas declaradas. As entradas estavam abertas, então o espectro é dominado por rede "
         "elétrica (~55%) e a validação fecha em 'suspect', não 'real': isso prova que a cadeia "
         "analógica está viva e com ganho, mas não permite chamar o sinal de EMG real nem medir a banda "
         "do filtro. O cabo SWD ficou conectado durante os runs — sem sessão de debug ativa na janela "
-        "medida, mas o delta do cabo em si não foi quantificado. Picos p99,9 e máximo excluem a "
-        "vizinhança das trocas de faixa da PPK2; sem isso o máximo aparente chegaria a 563 mA."
+        "medida, mas o delta do cabo em si não foi quantificado. Os artefatos de troca de faixa da "
+        "PPK2 são tratados pelo spike filter do fabricante; ainda assim sobram ~0,001% de amostras "
+        "acima de 25 mA, todas na mesma faixa, então o pico representativo é o p99,9 e não o máximo."
     )
-    fig.text(0.062, 0.36, "\n".join(textwrap.wrap(caveat, 132)), fontsize=8.5,
+    fig.text(0.062, 0.235, "\n".join(textwrap.wrap(caveat, 132)), fontsize=8.5,
              color=S.INK_MID, va="top", linespacing=1.66)
     S.page_footer(fig, "power_profiling/runs/", "PPK2 · source meter · 100 kS/s")
     return fig
@@ -547,8 +585,9 @@ def fig_cover(runs: dict) -> plt.Figure:
         "Alvo do projeto\n"
         "  2 mA médios, picos ≤ 5 mA\n\n"
         "Estado atual medido\n"
-        "  2,75 mA a 3,3 V com ADC a 1 kSPS\n"
-        "  6,80 mA a 5,0 V com ADC a 2 kSPS\n\n"
+        "  1,60 mA com power-down do ADC (meta de média atingida)\n"
+        "  2,53 mA a 3,3 V com ADC a 1 kSPS\n"
+        "  6,58 mA a 5,0 V com ADC a 2 kSPS\n\n"
         "Condição de entrada\n"
         "  Eletrodos abertos"
     )
@@ -559,9 +598,10 @@ def fig_cover(runs: dict) -> plt.Figure:
         "principal só era acordado pelo timer do LED de\n"
         "1 Hz, então o ADC era lido uma vez por segundo —\n"
         "os 2 kS/s do artigo não estavam acontecendo.\n\n"
-        "Agora são 2042 S/s com zero conversões perdidas,\n"
-        "e o consumo caiu 66% em corrente e 78% em\n"
-        "potência em relação ao ponto de partida."
+        "Agora são 1015 S/s a 1 kSPS (2042 em turbo) com\n"
+        "zero conversões perdidas, e o consumo caiu 80% em\n"
+        "corrente e 87% em potência em relação ao ponto\n"
+        "de partida."
     )
     fig.text(0.062, 0.60, left, fontsize=9.6, color=S.INK_MID, va="top", linespacing=1.75)
     fig.text(0.53, 0.60, right, fontsize=9.6, color=S.INK_MID, va="top", linespacing=1.75)
@@ -581,7 +621,8 @@ def build(runs: dict, out_pdf: Path) -> Path:
     with PdfPages(out_pdf) as pdf:
         for maker in order:
             pdf.savefig(maker()); plt.close("all")
-        for key, label in (("3V3", "trilho de 3,3 V"), ("5V", "trilho de 5,0 V")):
+        for key, label in (("3V3_1kSPS_pd", "3,3 V, 1 kSPS, com power-down"),
+                           ("3V3", "trilho de 3,3 V"), ("5V", "trilho de 5,0 V")):
             if key in runs:
                 pdf.savefig(fig_trace(runs[key],
                                       f"Corrente ao longo do ciclo de operação — {label}",

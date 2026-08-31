@@ -332,6 +332,37 @@ def project_autonomy(
     )
 
 
+
+def _check_readvertising(stats: list[StateStats], tol: float = 0.15) -> list[str]:
+    """Detecta a banda RE_ADVERTISING que na verdade continuou conectada.
+
+    O central no Windows nem sempre derruba o link quando bleak retorna do
+    disconnect(): a sessao WinRT so e liberada de fato quando o PROCESSO do
+    central termina, e o periferico segue conectado. Enquanto a aquisicao
+    rodava sempre, isso era invisivel - advertising e conectado custavam o
+    mesmo. Com o power-down do ADC os dois passaram a diferir por ~1 mA, e a
+    banda rotulada RE_ADVERTISING passou a medir, silenciosamente, o estado
+    conectado.
+
+    O teste: as duas bandas de advertising tem de custar o mesmo. Se
+    divergirem, e porque uma delas nao e o estado que o rotulo diz.
+    """
+    by = {s.state: s for s in stats}
+    a, r = by.get("ADVERTISING"), by.get("RE_ADVERTISING")
+    if not a or not r or a.mean_uA <= 0:
+        return []
+    dev = (r.mean_uA - a.mean_uA) / a.mean_uA
+    if abs(dev) <= tol:
+        return []
+    return [
+        "RE_ADVERTISING ({:.3f} mA) diverge de ADVERTISING ({:.3f} mA) em {:+.0f}%: "
+        "o central provavelmente NAO derrubou o link, e essa banda mediu o estado "
+        "conectado, nao advertising. Trate a banda como suspeita.".format(
+            r.mean_uA / 1000, a.mean_uA / 1000, dev * 100
+        )
+    ]
+
+
 def analyze_run(run_dir: Path, spike_filter: bool = True, guard_s: float = 0.25) -> RunReport:
     run_dir = Path(run_dir)
     meta = json.loads((run_dir / "run_meta.json").read_text(encoding="utf-8"))
@@ -371,6 +402,7 @@ def analyze_run(run_dir: Path, spike_filter: bool = True, guard_s: float = 0.25)
     )
 
     warnings: list[str] = list(counter_report.reasons)
+    warnings.extend(_check_readvertising(stats))
 
     validation_dict = None
     gain_dict = None

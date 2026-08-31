@@ -76,13 +76,24 @@ INIT_STATUS_BITS = {
 }
 
 
+class FwCountersError(RuntimeError):
+    """Falha ao ler os contadores por J-Link.
+
+    Deliberadamente NAO e SystemExit. Este modulo e usado como biblioteca pelo
+    run_bench, que le os contadores apenas para ANOTAR a taxa de aquisicao -
+    um dado auxiliar. Com SystemExit, um `except Exception` do chamador nao
+    captura (SystemExit deriva de BaseException) e a falha do J-Link derrubava
+    o ensaio inteiro antes de medir qualquer coisa. Ja aconteceu.
+    """
+
+
 def resolve_jlink() -> Path:
     for c in JLINK_CANDIDATES:
         if c.exists():
             return c
     for c in Path("C:/Program Files/SEGGER").glob("JLink_V*/JLink.exe"):
         return c
-    raise SystemExit("JLink.exe nao encontrado")
+    raise FwCountersError("JLink.exe nao encontrado")
 
 
 def symbol_addresses(map_path: Path) -> dict[str, int]:
@@ -121,7 +132,7 @@ def read_memory(jlink: Path, addr: int, n_words: int) -> list[int]:
             for w in m.group(1).split():
                 words.append(int(w, 16))
     if not words:
-        raise SystemExit(
+        raise FwCountersError(
             "Nao consegui ler memoria via J-Link. A placa esta alimentada? "
             "(a PPK2 e a unica fonte)\n--- saida do JLink ---\n" + proc.stdout[-2000:]
         )
@@ -149,10 +160,10 @@ def describe_init_status(value: int) -> str:
 def snapshot() -> dict:
     jlink = resolve_jlink()
     if not MAP_PATH.exists():
-        raise SystemExit(f".map nao encontrado em {MAP_PATH} - compile em Release primeiro")
+        raise FwCountersError(f".map nao encontrado em {MAP_PATH} - compile em Release primeiro")
     addrs = symbol_addresses(MAP_PATH)
     if not addrs:
-        raise SystemExit("nenhum contador encontrado no .map - o firmware tem os contadores?")
+        raise FwCountersError("nenhum contador encontrado no .map - o firmware tem os contadores?")
     base = min(addrs.values())
     span = max(addrs.values()) + 4 - base
     n_words = (span + 3) // 4
@@ -213,4 +224,7 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except FwCountersError as e:  # como CLI, falha e falha
+        raise SystemExit(str(e))

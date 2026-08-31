@@ -1,43 +1,118 @@
-# Ensaio 2 — o que falta fazer quando o hardware voltar
+# Ensaio 2 — executado em 2026-08-31
 
-**Estado:** todo o software está pronto e testado. O `relatorio_ensaio_2.pdf`
-já existe, mas foi gerado com dados de um run **anterior** (44,8 s de janela
-conectado+streaming). Falta rodar o run definitivo com janelas longas e o
-firmware novo.
+Run definitivo: **`runs/2026-08-31T14-11-34Z`** — 3,3 V, ADC a 1 kSPS, com
+power-down do ADC. 262 s de captura, 26,2 M amostras, janela de operação de
+184,8 s (60 s conectado + 120 s streaming + 6 s conectado).
 
-**Pré-requisito:** PPK2 e J-Link estavam ausentes do USB no momento em que isto
-foi escrito (nenhum `VID_1915` nem `VID_1366`). Sem a PPK2 a placa não tem
-alimentação nenhuma — nada pode ser gravado nem medido.
+Entregáveis: [`relatorio_ensaio_2.pdf`](relatorio_ensaio_2.pdf) e
+`runs/2026-08-31T14-11-34Z/export/`.
 
 ---
 
-## Passo 0 — Conferir que o hardware voltou
+## Resultado
 
-```powershell
-Get-PnpDevice -PresentOnly | Where-Object { $_.InstanceId -match 'VID_1915|VID_1366' } |
-  Select-Object FriendlyName, Status
-```
+| Janela | Média | RMS |
+|---|---|---|
+| Todas as etapas | 2,262 mA | 3,405 mA |
+| **Conectado + streaming** | **2,647 mA** | **3,808 mA** |
+| Somente streaming | 2,734 mA | 3,989 mA |
 
-Esperado: `PPK2` (VID_1915) e `J-Link` (VID_1366) presentes. Anote a porta COM
-da PPK2 — foi `COM8` nesta máquina, mas ela muda ao reconectar.
+O valor de 2,75 mA reportado antes era a **média da banda ADVERTISING** — não
+era RMS e não era o run inteiro. A janela completa **subestima em 15%** a
+corrente de operação.
 
-```bash
-python power_profiling/ppk2_check.py --port COM8
-```
+**O RMS é ambíguo por um fator de ~1,5** dependendo do tratamento dos artefatos
+de troca de faixa da PPK2: 3,81 mA pelo método do fabricante, 5,58 mA no bruto.
+A média varia só 8,7%. Para energia e autonomia use a média; o RMS importa para
+perdas I²R na ESR.
 
-Fiação: **VOUT** e **GND** da PPK2 no conector J2 da placa, VIN aberto, modo
-source meter. Ver `power_profiling/README.md`.
+## Power-down do ADC: validado em hardware
+
+| Situação | Contadores |
+|---|---|
+| Desconectado | `g_acq_running` = 0, `g_acq_stop_count` = 1, `g_loop_count` **congelado** (CPU dormindo) |
+| Conectado | 1014,7 S/s, **0% de conversões perdidas**, **0 blocos descartados** |
+| Após desconectar | `g_acq_stop_count` = 2, `g_acq_running` = 0 |
+| Sempre | `g_acq_error_count` = 0, `g_init_status` = 0x3F |
+
+Efeito: ADVERTISING caiu de 2,52 para 1,54 mA (−39%); autonomia projetada de
+151 para 238 h. **A meta de 2 mA médios foi atingida** (1,60 mA na mistura
+94/3/3). A de 5 mA de pico não — p99,9 = 18,7 mA.
 
 ---
 
-## Passo 1 — Gravar o firmware com power-down do ADC
+## O que ficou aberto
 
-O código já está commitado, **mas nunca foi gravado nem medido** — o hardware
-saiu do ar antes. A configuração alvo do ensaio é **3,3 V + ADC a 1 kSPS**,
-porque é de onde saiu o número que o Robert avaliou.
+### 1. A banda RE_ADVERTISING não mede advertising
+
+O central no Windows **não derruba o link** ao chamar `disconnect()`: a sessão
+WinRT só é liberada quando o **processo** do central termina, e o `run_bench`
+não pode terminar porque é ele que mantém o stream da PPK2 vivo.
+
+Diagnóstico que fecha o caso: a cadência dos picos de rádio na banda suspeita é
+de **97 ms** (intervalo de conexão), contra 197 ms (intervalo de anúncio) na
+banda ADVERTISING. E os contadores provam que o firmware está correto — depois
+de um disconnect limpo, `g_acq_stop_count` incrementa.
+
+Enquanto a aquisição rodava sempre isso era invisível: advertising e conectado
+custavam o mesmo. `analyze.py` agora detecta e avisa quando as duas bandas
+divergem mais de 15%.
+
+**Impacto:** +0,072 mA (3,2%) na janela *todas as etapas*. A janela
+conectado+streaming **não** é afetada. A banda ADVERTISING é válida.
+
+**Correção possível:** rodar o central BLE num processo filho que o bench mata
+a cada fase — o único mecanismo que comprovadamente libera a sessão. É mudança
+de arquitetura do orquestrador, não um ajuste.
+
+### 2. A leitura pré-run da taxa de aquisição virou inútil
+
+Ela é feita com o dispositivo desconectado — exatamente quando o ADC está
+dormindo. O valor correto passou a ser 0 S/s. Consequência: a análise espectral
+cai para a taxa de **entrega**, ~3% abaixo da de aquisição.
+
+Contornado neste run medindo à parte, com uma conexão dedicada, e gravando em
+`fw_counters.json` com o rótulo `POS-run`. A correção estrutural é o bench
+medir isso dentro de uma conexão (antes da janela medida, para não perturbar).
+
+### 3. O máximo de corrente não é um pico da placa
+
+Mesmo após o spike filter sobram ~0,001% das amostras acima de 25 mA (174 de
+18,5 M na janela de operação), **todas na mesma faixa de medição da PPK2** —
+resíduo de artefato que a detecção não pegou, porque ela olha as 3 amostras
+seguintes à troca e alguns artefatos caem fora dessa janela.
+
+O relatório publica o **p99,99** como pico representativo e marca o máximo com
+asterisco. Para um número definitivo: travar a faixa da PPK2 (o opcode
+`RANGE_SET` existe no protocolo) ou medir com shunt + osciloscópio como
+referência independente.
+
+### 4. Perda de captura
+
+37 gaps de contador não explicados por troca de faixa, num registro de 26,6 M
+amostras. Limite superior da perda: 37 × 63 = 2331 amostras, **≤ 0,01%**.
+Não invalida nada, mas `capture_lossless` fica `False`.
+
+### 5. Itens de otimização não mexidos
+
+- **DC/DC do nRF52840** — ainda `POWER_CONFIG_DEFAULT_DCDCEN 0`. Antes de
+  habilitar, confirmar que o módulo XIAO tem o indutor no pino DCC.
+- **TWIM com EasyDMA por PPI** — hoje o driver legado `nrfx_twi`, bloqueante.
+  `NRFX_TWIM_ENABLED 1` já está posto; a migração exige reverter dois patches
+  feitos à mão no SDK vendorizado.
+- **Escrita BLE de ganho é no-op** — `on_write` valida e loga mas nunca atribui
+  `gain_level`.
+- **Sem número de sequência no pacote** — impede medir perda de ar diretamente.
+- **Marcadores de estado em GPIO** para a porta lógica da PPK2 (pads livres
+  P0.02 / P0.03 / P1.14 / P1.15), que dariam fronteiras de banda com precisão
+  de microssegundos no mesmo stream da corrente.
+
+---
+
+## Como reproduzir
 
 ```bash
-# 1 kSPS: mudar o default em ADS112C04.h
+# 1 kSPS
 sed -i 's/^#define ADS_TURBO_MODE 1$/#define ADS_TURBO_MODE 0/' \
   emg_nrf_ses/project/ble_peripheral/ble_app_blinky/ADS112C04.h
 
@@ -45,180 +120,29 @@ export EMBUILD_EXE="/c/Program Files/SEGGER/SEGGER Embedded Studio 8.30a/bin/emB
 export JLINK_EXE="/c/Program Files/SEGGER/JLink_V970/JLink.exe"
 bash .claude/skills/build-flash-nrf52/scripts/build.sh Release
 
-# a placa precisa estar alimentada para o J-Link conectar
+# a placa precisa estar alimentada para o J-Link conectar (a PPK2 e a unica fonte)
 python power_profiling/ppk2_hold_on.py --port COM8 --voltage-mv 3300 &
-sleep 3
 bash .claude/skills/build-flash-nrf52/scripts/flash_app.sh Release
-```
+python power_profiling/fw_counters.py --watch 8      # esperado: EM POWER-DOWN
 
-Ao mudar `ADS_TURBO_MODE`, os coeficientes do filtro digital trocam
-automaticamente (estão amarrados ao mesmo flag) — não há nada a ajustar à mão.
-
----
-
-## Passo 2 — Validar o power-down, que é código não testado
-
-**Este é o passo que mais pode dar errado.** O power-down do ADC nunca rodou
-em hardware. Contadores a conferir:
-
-```bash
-python power_profiling/fw_counters.py --watch 8
-```
-
-| Situação | Esperado |
-|---|---|
-| Desconectado | `aquisicao: EM POWER-DOWN`, `g_acq_running` = 0 |
-| `g_acq_error_count` | **0** — se subir, o I²C falhou na transição |
-| `g_init_status` | `0x3F` (todos os bits de init) |
-
-E com uma conexão BLE ativa, `g_acq_running` deve ir para 1 e a taxa de
-amostragem voltar a ~1020 S/s:
-
-```bash
-python -c "
-import sys, asyncio; sys.path.insert(0,'power_profiling')
-from timeline import Clock; from ble_client import EmgBleClient
-async def m():
-    c = EmgBleClient(Clock.start_now(), lambda k,d: None)
-    d = await c.scan(timeout=12); await c.connect(d, use_cached_services=False)
-    await c.read_mtu(); await c.subscribe()
-    print('subscrito, mantendo 30 s'); await asyncio.sleep(30)
-    print('pacotes:', len(c.drain_packets()))
-    await c.unsubscribe(); await c.disconnect()
-asyncio.run(m())
-" &
-sleep 10 && python power_profiling/fw_counters.py --watch 8
-```
-
-**Se `g_acq_error_count` subir ou o STREAMING vier vazio:** o `ads112c04_start()`
-não está acordando o ADC depois do POWERDOWN. O datasheet diz que POWERDOWN
-preserva os registradores, mas se na prática não preservar, a correção é
-reconfigurar no wake — chamar `ads112c04_configure_raw_mode()` em vez de só
-`ads112c04_start()` em `main.c`, no bloco de reconciliação da aquisição.
-Fallback rápido: desativar o power-down (`g_acq_should_run = true` fixo) e
-rodar o ensaio sem ele — a janela que o Robert pediu não depende disso.
-
----
-
-## Passo 3 — O run do ensaio, com janelas longas
-
-```bash
+# o ensaio (mate o ppk2_hold_on antes: ele detem a COM8)
 python power_profiling/run_bench.py --port COM8 --voltage-mv 3300 \
   --out power_profiling/runs --no-gain-sweep --input-condition open \
   --duration CONNECTED_IDLE=60 --duration STREAMING=120
-```
 
-Por que essas durações: o RMS do pior caso merece amostra estatística maior, e
-o `CONNECTED_IDLE` estava em 10 s **só** por causa do bug de overflow de
-`packet_index`, que já foi corrigido. Total ~290 s, ~115 MB de captura.
-
-Conferir na saída:
-- `pre-run: aquisicao do ADC = ~1020 S/s` com `init_status = 0x3F`
-- `pacotes EMG recebidos` > 1900 (120 s a ~16 pkt/s)
-
----
-
-## Passo 4 — Exportar os dados para o Robert
-
-```bash
-python power_profiling/export_data.py power_profiling/runs/<NOVO_RUN>
-```
-
-Gera em `runs/<run>/export/`:
-
-| Arquivo | Para quê |
-|---|---|
-| `conectado_streaming_1000Hz.csv` | **o principal pedido dele** — abre em planilha |
-| `todas_etapas_1000Hz.csv` | a outra janela pedida |
-| `*_full_uA.npy` | resolução cheia (100 kS/s), uso programático |
-| `*_full.json` | metadados: fs, bandas, tensão |
-| `resumo_janelas.json` | estatísticas já calculadas |
-
-**A auto-checagem tem de passar.** O script recalcula média e RMS a partir do
-CSV decimado e compara com a resolução cheia; erro esperado ~5e-6. Se imprimir
-`DIVERGE`, ele aborta de propósito — não entregue um CSV que dê RMS errado.
-
----
-
-## Passo 5 — Gerar o relatório definitivo
-
-```bash
-python power_profiling/report_ensaio2.py \
-  --run power_profiling/runs/<NOVO_RUN> \
+python power_profiling/export_data.py power_profiling/runs/<RUN>
+python power_profiling/report_ensaio2.py --run power_profiling/runs/<RUN> \
   -o power_profiling/relatorio_ensaio_2.pdf
 ```
 
-Conferir visualmente: nas páginas de janela, a duração deve refletir os 180 s
-(60 + 120) em vez dos 44,8 s do run antigo.
+### Duas armadilhas que custaram tempo
 
----
+**Não mate o processo do central BLE no meio de uma conexão.** O Windows fica
+com uma sessão órfã e reconecta ao dispositivo sozinho, contaminando a banda
+ADVERTISING do run seguinte. Deixe o script desconectar e sair.
 
-## Passo 6 — Regenerar o relatório de consumo com os picos corrigidos
-
-`analyze_run()` agora usa `spike_filter=True` por default. Isso **corrige os
-picos** que estavam subestimados no `relatorio_consumo.pdf` e no README.
-
-```bash
-python power_profiling/report_pdf.py -o power_profiling/relatorio_consumo.pdf \
-  --run "5V=power_profiling/runs/2026-08-26T11-49-35Z" \
-  --run "3V3=power_profiling/runs/2026-08-26T11-52-01Z" \
-  --run "3V3_1kSPS=power_profiling/runs/2026-08-26T12-14-02Z"
-```
-
-Depois atualizar no `README.md` a coluna de picos da tabela de consumo por
-estado. **As médias não mudam** — só os picos sobem. Se alguma média mudar
-mais que ~8%, algo está errado.
-
-> Feche o PDF no editor antes: o Windows trava o arquivo e a geração falha com
-> `PermissionError`.
-
----
-
-## Passo 7 — Commitar
-
-```bash
-git add power_profiling/ README.md
-# os arquivos de export sao pequenos (CSV ~2-7 MB) e podem ser versionados;
-# runs/ inteiro esta no .gitignore
-```
-
----
-
-## O que já está pronto (não precisa refazer)
-
-| Item | Estado |
-|---|---|
-| `export_data.py` | testado com dados reais, auto-checagem com erro 5e-6 |
-| `report_ensaio2.py` | gera 6 páginas, revisado visualmente |
-| `--duration ESTADO=S` no `run_bench.py` | testado (`--help`) |
-| `_apply_spike_filter` fiel ao algoritmo da Nordic | implementado e comparado |
-| `analyze_run(spike_filter=True)` | default trocado |
-| Contadores de power-down no `fw_counters.py` | implementados |
-| Firmware com power-down | compila; **não gravado, não medido** |
-
----
-
-## Respostas ao Robert que já estão medidas
-
-Estas não dependem do run novo — saíram dos dados existentes:
-
-**"Esse valor de 2,75 é RMS ou média?"** Era a **média da banda ADVERTISING**.
-Não era RMS e não era o run inteiro.
-
-**"Faça a medição só de streaming e conectado."** Feito (3,3 V, 1 kSPS,
-janela de 44,8 s; o run novo estende para 180 s):
-
-| Janela | Média | RMS |
-|---|---|---|
-| Todas as etapas | 2,113 mA | 3,304 mA |
-| **Conectado + streaming** | **2,690 mA** | **3,854 mA** |
-
-A intuição dele estava certa: a janela completa **subestima em 21%** a
-corrente de operação.
-
-**Ressalva importante a comunicar.** O RMS depende do tratamento dos artefatos
-de troca de faixa da PPK2 — varia de **3,85 mA** (método do fabricante) a
-**5,60 mA** (bruto), porque o RMS pondera os extremos ao quadrado e é
-justamente ali que o artefato vive. A **média é robusta** (~7,7% de
-espalhamento). Para dimensionar energia e autonomia, use a média; o RMS
-importa para perdas I²R na ESR. Detalhes na página 2 do relatório.
+**A falha do J-Link derrubava o ensaio inteiro.** `fw_counters` levantava
+`SystemExit`, que não é capturado por `except Exception` (deriva de
+`BaseException`), então a leitura dos contadores — um dado *auxiliar* — abortava
+um run de 5 minutos antes de medir qualquer coisa, e sem traceback. Corrigido
+com uma exceção própria (`FwCountersError`).

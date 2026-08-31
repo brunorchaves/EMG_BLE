@@ -31,6 +31,8 @@ import report_style as S
 from analyze import analyze_run
 from export_data import WINDOWS, _load, _slices
 
+NL = chr(10)
+
 WINDOW_LABEL = {
     "todas_etapas": "Todas as etapas",
     "conectado_streaming": "Conectado + streaming",
@@ -56,13 +58,22 @@ def load(run_dir: Path) -> dict:
     ex = run_dir / "export" / "resumo_janelas.json"
     if ex.exists():
         export = json.loads(ex.read_text(encoding="utf-8"))
-    fs_acq = None
+    # A taxa de aquisicao vem do contador do firmware, lido por J-Link antes do
+    # run. Sem J-Link esse arquivo nao existe, e a unica taxa observavel e a de
+    # ENTREGA pelo BLE - que e um PISO da de aquisicao (blocos descartados so
+    # subtraem). Rotulamos qual das duas e, para nao apresentar um piso como se
+    # fosse a taxa do ADC.
+    fs_acq, fs_src = None, "aquisicao"
     fwc = run_dir / "fw_counters.json"
     if fwc.exists():
         fs_acq = json.loads(fwc.read_text(encoding="utf-8")).get("fs_acquisition_sps")
+    if not fs_acq:
+        fs_acq = (getattr(rep, "emg_validation", None) or {}).get("fs_effective_sps")
+        fs_src = "entrega BLE"
     return {
         "dir": run_dir, "meta": meta, "source_v": source_v, "blk": blk, "raw": raw,
         "fit": fit, "bands": bands, "report": rep, "export": export, "fs_acq": fs_acq,
+        "fs_src": fs_src,
         "by_state": {s["state"]: s for s in rep.state_stats},
     }
 
@@ -111,7 +122,8 @@ def fig_cover(run: dict) -> plt.Figure:
     )
     right = (
         "Medido nesta configuração\n"
-        f"  Trilho: {run['source_v']:.1f} V     ADC: {run['fs_acq'] or 0:.0f} S/s\n\n"
+        f"  Trilho: {run['source_v']:.1f} V"
+        f"     ADC: {run['fs_acq'] or 0:.0f} S/s ({run['fs_src']})\n\n"
         f"  Todas as etapas\n"
         f"     média {todas.get('mean_mA', float('nan')):.3f} mA"
         f"     RMS {todas.get('rms_mA', float('nan')):.3f} mA\n\n"
@@ -171,34 +183,71 @@ def fig_method(run: dict) -> plt.Figure:
         elif r_ == 2:
             cell.set_facecolor("#e2f0f1")
 
+    mr, rr, xr = ex.get("mean_raw_mA", 0), ex.get("rms_raw_mA", 0), ex.get("max_raw_mA", 0)
+    mf, rf, xf = ex.get("mean_mA", 0), ex.get("rms_mA", 0), ex.get("max_mA", 0)
+    p999 = ex.get("p99_9_mA", 0)
+    d_mean = abs(mr - mf) / max(mf, 1e-9) * 100
+    d_rms = abs(rr - rf) / max(rf, 1e-9) * 100
     body = [
         ("Por que existe artefato",
-         "A PPK2 troca a faixa de medição quando a corrente muda de ordem de grandeza, e nas "
-         "amostras imediatamente após a transição a leitura é artefato de acomodação. Nesta placa "
-         "isso produzia leituras de até 57,7 mA a 3,3 V — fisicamente impossível, o consumo total é "
-         "de ~2,7 mA e o pico real fica em ~22 mA. E as trocas de faixa são CAUSADAS pelos picos "
-         "reais de corrente (uma excursão de 2 para 20 mA obriga a troca), então artefato e sinal "
-         "verdadeiro ocorrem no mesmo instante."),
+         "A PPK2 troca a faixa de medição quando a corrente muda de ordem de grandeza, e nas amostras "
+         "imediatamente após a transição a leitura é artefato de acomodação. E as trocas de faixa são "
+         "CAUSADAS pelos picos reais de corrente — uma excursão de 2 para 20 mA obriga a troca —, "
+         "então artefato e sinal verdadeiro ocorrem no mesmo instante e não há como separar um do "
+         "outro por posição no tempo."),
         ("Por que isso afeta o RMS muito mais que a média",
-         "O RMS pondera cada amostra ao quadrado, então é dominado pelos extremos — exatamente onde "
-         "o artefato vive. A média, somando linearmente, quase não sente: varia 7,7% entre bruto e "
-         "filtrado. O RMS varia 45%. Qualquer número de RMS entregue sem declarar o tratamento é "
-         "ambíguo por um fator de ~1,5."),
+         "O RMS pondera cada amostra ao quadrado, então é dominado pelos extremos, exatamente onde o "
+         "artefato vive. A média, somando linearmente, quase não sente: varia {:.1f}% entre bruto e "
+         "filtrado, contra {:.0f}% do RMS. Nesta janela o p99,9 é {:.1f} mA mas o máximo chega a "
+         "{:.0f} mA — extremos raros, e são eles que decidem o RMS.".format(d_mean, d_rms, p999, xf)),
         ("O tratamento adotado, e um erro que foi corrigido",
-         "Adotado o spike filter da própria Nordic: duas médias móveis exponenciais causais rodam "
-         "sobre todas as amostras e, nas 3 amostras após cada troca de faixa, a leitura é "
-         "SUBSTITUÍDA pela média móvel — não descarta tempo nem usa o artefato como referência. "
-         "Um relatório anterior desta bancada descartava ±3 amostras em torno de cada troca, o que "
-         "removia 14 a 27% do registro (sistematicamente as altas) e enviesava a média em −27%."),
+         "Adotado o spike filter da própria Nordic: duas médias móveis exponenciais causais rodam sobre "
+         "todas as amostras e, nas 3 amostras após cada troca de faixa, a leitura é SUBSTITUÍDA pela "
+         "média móvel — não descarta tempo nem usa o artefato como referência. Um relatório anterior "
+         "desta bancada descartava ±3 amostras em torno de cada troca, o que removia 14 a 27% do "
+         "registro (sistematicamente as altas) e enviesava a média em −27%."),
         ("Como obter um RMS definitivo",
-         "A ambiguidade é do instrumento, não da placa. Para eliminá-la: travar a faixa de medição "
-         "da PPK2 (o opcode RANGE_SET existe no protocolo), ou medir com shunt e osciloscópio como "
-         "referência independente. Até então, o honesto é reportar a faixa: RMS entre 3,85 e "
-         "5,60 mA, sendo 3,85 o valor pelo método do fabricante."),
+         "A ambiguidade é do instrumento, não da placa. Para eliminá-la: travar a faixa de medição da "
+         "PPK2 (o opcode RANGE_SET existe no protocolo) ou medir com shunt e osciloscópio como "
+         "referência independente. Até então o honesto é reportar a faixa: RMS entre {:.2f} e "
+         "{:.2f} mA, sendo {:.2f} o valor pelo método do fabricante.".format(rf, rr, rf)),
     ]
-    _text_blocks(fig, body, y0=0.455)
+    _text_blocks(fig, body, y0=0.455, width=150, size=8.1)
     S.page_footer(fig, "spike filter: ppk2_decode._apply_spike_filter", "conforme PPK2_API.get_adc_result")
     return fig
+
+
+def _readvert_caveat(run: dict) -> str | None:
+    """Texto da ressalva quando a banda RE_ADVERTISING nao mediu advertising.
+
+    O central no Windows nao derruba o link no disconnect() - a sessao WinRT so
+    e liberada quando o PROCESSO do central termina, e o bench nao pode
+    terminar (ele e dono do stream da PPK2). Enquanto a aquisicao rodava
+    sempre isso era invisivel; com o power-down do ADC as duas bandas passaram
+    a diferir por ~1 mA. Confirmado pela cadencia dos picos: 197 ms
+    (advertising) contra 97 ms (intervalo de conexao) na banda suspeita.
+    """
+    w = [x for x in (run["report"].warnings or []) if "RE_ADVERTISING" in x]
+    if not w:
+        return None
+    bs = run["by_state"]
+    a, r = bs.get("ADVERTISING"), bs.get("RE_ADVERTISING")
+    ex = run["export"].get("todas_etapas", {})
+    if not (a and r and ex):
+        return w[0]
+    # quanto a janela mudaria se essa banda tivesse medido advertising de fato
+    dur = ex.get("duration_s", 0.0) or 1.0
+    delta = (r["mean_uA"] - a["mean_uA"]) / 1000.0 * r["duration_s"] / dur
+    return (
+        "Ressalva: a banda RE_ADVERTISING não mediu advertising — o link BLE continuou de pé. "
+        "O Windows não derruba a conexão no disconnect(); a sessão só cai quando o processo do "
+        "central termina, e o bench não pode terminar (é ele que mantém o stream da PPK2). "
+        "Cadência dos picos de rádio: 197 ms (anúncio) na ADVERTISING contra 97 ms (conexão) "
+        "na suspeita — {:.3f} contra {:.3f} mA. Efeito: a média desta janela está {:.3f} mA "
+        "ALTA ({:.1f}%). A janela conectado+streaming NÃO é afetada.".format(
+            a["mean_uA"] / 1000, r["mean_uA"] / 1000, abs(delta),
+            abs(delta) / max(ex.get("mean_mA", 1e-9), 1e-9) * 100)
+    )
 
 
 def fig_window(run: dict, window: str) -> plt.Figure:
@@ -225,9 +274,11 @@ def fig_window(run: dict, window: str) -> plt.Figure:
     rms_mA = ex.get("rms_mA", float(np.sqrt(np.mean(cur ** 2)) / 1000))
     ax.axhline(mean_mA, color=S.GOOD, ls="-", lw=1.2, zorder=4)
     ax.axhline(rms_mA, color=S.BEFORE, ls=(0, (5, 3)), lw=1.3, zorder=4)
-    ax.text(t[-1], mean_mA, f" média {mean_mA:.3f} mA ", color=S.GOOD, fontsize=8,
-            va="bottom", ha="right", fontweight="bold")
-    ax.text(t[-1], rms_mA, f" RMS {rms_mA:.3f} mA ", color=S.BEFORE, fontsize=8,
+    # extremos opostos do eixo: as duas linhas ficam a ~1 mA uma da outra num
+    # eixo que vai a 60 mA, entao rotular as duas no mesmo x as sobrepoe.
+    ax.text(t[0], mean_mA, f"  média {mean_mA:.3f} mA", color=S.GOOD, fontsize=8,
+            va="top", ha="left", fontweight="bold")
+    ax.text(t[-1], rms_mA, f"RMS {rms_mA:.3f} mA  ", color=S.BEFORE, fontsize=8,
             va="bottom", ha="right", fontweight="bold")
 
     ax.set_xlabel("Tempo na janela (s)"); ax.set_ylabel("Corrente (mA)")
@@ -245,12 +296,19 @@ def fig_window(run: dict, window: str) -> plt.Figure:
         ("RMS", f"{rms_mA:.3f} mA   ({ex.get('rms_mW', 0):.2f} mW)"),
         ("p95", f"{ex.get('p95_mA', float('nan')):.2f} mA"),
         ("p99,9", f"{ex.get('p99_9_mA', float('nan')):.2f} mA"),
-        ("Máximo", f"{ex.get('max_mA', float('nan')):.2f} mA"),
+        ("p99,99", f"{np.percentile(cur, 99.99) / 1000:.2f} mA"),
+        ("Máximo", f"{ex.get('max_mA', float('nan')):.2f} mA  *"),
     ]
     txt = "\n".join(f"  {k:<10} {v}" for k, v in stat_rows)
-    fig.text(0.075, 0.30, "Estatísticas da janela", fontsize=10.0, color=S.ACCENT,
+    fig.text(0.075, 0.325, "Estatísticas da janela", fontsize=10.0, color=S.ACCENT,
              fontweight="bold")
-    fig.text(0.075, 0.275, txt, fontsize=8.8, color=S.INK_MID, va="top",
+    # O maximo nao e um pico da placa: e o residuo do artefato de troca de faixa
+    # que o spike filter nao pegou (a deteccao usa as 3 amostras seguintes a
+    # troca, e alguns artefatos caem fora dessa janela). Publicar esse numero
+    # como "pico de corrente" seria repetir, invertido, o erro do relatorio
+    # anterior - por isso ele vai com asterisco e contagem.
+    n_hi = int(np.count_nonzero(cur > 25_000))
+    fig.text(0.075, 0.302, txt, fontsize=8.4, color=S.INK_MID, va="top",
              linespacing=1.7, family="DejaVu Sans")
 
     files = [
@@ -258,13 +316,26 @@ def fig_window(run: dict, window: str) -> plt.Figure:
         f"{window}_full_uA.npy",
         f"{window}_full.json",
     ]
-    fig.text(0.52, 0.30, "Arquivos de dados desta janela", fontsize=10.0, color=S.ACCENT,
+    fig.text(0.52, 0.325, "Arquivos de dados desta janela", fontsize=10.0, color=S.ACCENT,
              fontweight="bold")
-    fig.text(0.52, 0.275, "\n".join("  " + f for f in files) +
-             "\n\n  CSV: um bin por linha, com média e RMS do bin.\n"
-             "  RMS total = sqrt(média(i_rms_mA²)) — exato.\n"
-             "  .npy: 100 kS/s em µA, resolução cheia.",
+    # Quando a ressalva vai nesta pagina, ela precisa do espaco que estas tres
+    # linhas ocupam - e elas sao redundantes com a pagina de inventario.
+    note = ["  " + f for f in files]
+    if not (window == "todas_etapas" and _readvert_caveat(run)):
+        note += ["", "  CSV: um bin por linha, com média e RMS do bin.",
+                 "  RMS total = sqrt(média(i_rms_mA²)) — exato.",
+                 "  .npy: 100 kS/s em µA, resolução cheia."]
+    note += ["", f"  * máximo: {n_hi} amostras em {cur.size:,} "
+             f"({n_hi / cur.size * 100:.4f}%) acima de 25 mA,",
+             "    resíduo de artefato de troca de faixa — todas na mesma",
+             "    faixa da PPK2. O pico representativo é o p99,99."]
+    fig.text(0.52, 0.302, NL.join(note),
              fontsize=8.8, color=S.INK_MID, va="top", linespacing=1.7)
+    cav = _readvert_caveat(run) if window == "todas_etapas" else None
+    if cav:
+        fig.text(0.075, 0.105, NL.join(textwrap.wrap(cav, 160)), fontsize=7.8,
+                 color=S.ALERT, va="top", linespacing=1.5)
+
     S.page_footer(fig, run["dir"].name, f"{run['source_v']:.1f} V · {run['fs_acq'] or 0:.0f} S/s")
     return fig
 

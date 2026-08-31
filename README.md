@@ -248,11 +248,11 @@ Trabalho financiado em parte pela CAPES (Finance Code 001), pelo Instituto Serra
 
 Valores **medidos** no firmware atual (ver [Consumo e desempenho medidos](#-consumo-e-desempenho-medidos)):
 
-- **Aquisição** — ADS112C04, 16 bits, **2042 S/s medidos**, governada pela interrupção de DRDY#, 0% de conversões perdidas
-- **Streaming BLE** — 60 amostras/pacote, 120 B por notificação, **~32 pacotes/s**, MTU 247, DLE 251
+- **Aquisição** — ADS112C04, 16 bits, governada pela interrupção de DRDY#, 0% de conversões perdidas. **1015 S/s** na configuração default (1 kSPS); 2042 S/s em turbo
+- **Streaming BLE** — 60 amostras/pacote, 120 B por notificação, **17 pacotes/s a 1 kSPS** (32/s em turbo), MTU 247, DLE 251
 - **Controle de ganho remoto** — DS3502 via I²C (ver ressalva em [Limitações conhecidas](#-limitações-conhecidas))
 - **Filtragem digital** — Butterworth passa-banda de 2ª ordem, 20–400 Hz, coeficientes amarrados à taxa de amostragem
-- **Consumo** — 6,80 mA a 5,0 V; **4,37 mA a 3,3 V**; 2,75 mA a 3,3 V com o ADC a 1 kSPS
+- **Consumo** — 6,58 mA a 5,0 V; 2,53 mA a 3,3 V com o ADC a 1 kSPS; **1,60 mA com o power-down do ADC quando desconectado** (238 h de autonomia projetada)
 - **Buffer circular** — FIFO de 64 amostras, pacotes de 60
 - **Diagnóstico** — contadores em RAM legíveis via J-Link, independentes do BLE
 
@@ -566,27 +566,46 @@ Intervalo conexão:  ~93 ms negociado com Windows
 
 A 5,0 V, com LED e UART desligados:
 
-| Estado | Corrente média | Potência | Pico real* |
+| Estado | Corrente média | Potência | p99,9* |
 |---|---|---|---|
 | OFF | 0,000 mA | 0,00 mW | — |
-| BOOT | 6,79 mA | 33,96 mW | 28,1 mA |
-| ADVERTISING | 6,80 mA | 34,02 mW | 28,8 mA |
-| CONNECTED (sem CCCD) | 6,83 mA | 34,16 mW | 26,3 mA |
-| STREAMING | 7,28 mA | 36,40 mW | 29,6 mA |
+| BOOT | 6,56 mA | 32,78 mW | 22,2 mA |
+| ADVERTISING | 6,56 mA | 32,80 mW | 21,9 mA |
+| CONNECTED (sem CCCD) | 6,59 mA | 32,96 mW | 21,2 mA |
+| STREAMING | 7,05 mA | 35,25 mW | 24,4 mA |
 
-\* Picos excluem a vizinhança das trocas de faixa de medição da PPK2, onde o
-instrumento gera artefatos — sem essa exclusão o máximo aparente chegaria a
-563 mA, fisicamente impossível nesta placa.
+\* Os artefatos de troca de faixa da PPK2 são tratados com o **spike filter do
+próprio fabricante**, que substitui as 3 amostras seguintes a cada troca por
+uma média móvel causal em vez de descartá-las. Uma versão anterior desta tabela
+descartava ±3 amostras em torno de cada troca — mas as trocas de faixa são
+*causadas* pelos picos reais de corrente, então aquela máscara removia 14 a 27%
+do registro, sistematicamente as amostras altas, enviesando a média em −27%. É
+por isso que as médias desta tabela diferem ~3,5% das publicadas antes.
+
+O **máximo** não é reportado como pico da placa: mesmo após o filtro sobram
+~0,001% de amostras acima de 25 mA, todas na mesma faixa de medição, resíduo de
+artefato. O pico representativo é o p99,9.
 
 ### Efeito da tensão de alimentação e da taxa do ADC
 
-| Configuração | Corrente | Potência | Autonomia* |
+| Configuração | Corrente média* | Potência | Autonomia** |
 |---|---|---|---|
-| 5,0 V · 2 kSPS | 6,80 mA | 34,02 mW | 36,9 h |
-| **3,3 V · 2 kSPS** | **4,37 mA** | **14,41 mW** | **87,0 h** |
-| 3,3 V · 1 kSPS | 2,75 mA | 9,10 mW | 138,2 h |
+| 5,0 V · 2 kSPS | 6,58 mA | 32,87 mW | 38,3 h |
+| 3,3 V · 2 kSPS | 3,94 mA | 13,00 mW | 96,8 h |
+| 3,3 V · 1 kSPS | 2,53 mA | 8,35 mW | 150,6 h |
+| **3,3 V · 1 kSPS + power-down do ADC** | **1,60 mA** | **5,28 mW** | **238,1 h** |
 
-\* Bateria de 400 mAh @ 3,7 V, conversor a 85%.
+\* Média ponderada pelo ciclo de trabalho de 94% advertising / 3% conectado /
+3% streaming — a mesma mistura usada no cálculo de autonomia. Sem o power-down
+do ADC essa ponderação quase não importava (advertising e conectado custavam o
+mesmo); com ele, importa muito.
+
+\*\* Bateria de 400 mAh @ 3,7 V, conversor a 85%.
+
+**A meta de 2 mA médios foi atingida** (1,60 mA com essa mistura; 2,65 mA se o
+dispositivo ficar 100% do tempo conectado e transmitindo). A meta de **5 mA de
+pico não** — o p99,9 é de 18,7 mA, e reduzi-lo é problema de desacoplamento
+local, não de firmware (ver [Para onde vai a corrente](#para-onde-vai-a-corrente)).
 
 Tensão mínima de operação: o firmware roda até 2,0 V, mas **2,7 V é o piso com
 todos os componentes em especificação** (limite inferior do DS3502). Abaixo de
@@ -598,16 +617,22 @@ referência para ~1,65 V com dois resistores antes do buffer U2.4.
 
 ### Para onde vai a corrente
 
-- **Aquisição (ADC + I²C + CPU): ~4,1 mA** — obtido comparando o transiente de
-  partida (2,69 mA antes do ADC ser configurado) com o regime (6,81 mA)
-- **Rádio BLE: 0,48 mA** — diferença entre ADVERTISING e STREAMING, com o link
-  entregando 32 pacotes/s. O rádio **não** é o gargalo
+- **Aquisição (ADC + I²C + CPU): 0,95 mA a 1 kSPS e 3,3 V** — agora medido
+  **direto**, não inferido: com o power-down do ADC, ADVERTISING (1,536 mA, ADC
+  dormindo) e CONNECTED (2,487 mA, ADC convertendo) diferem apenas pela
+  aquisição. A 5,0 V e 2 kSPS o mesmo termo era de ~4,1 mA, estimado pelo
+  transiente de partida
+- **Rádio BLE: 0,25 mA** — diferença entre CONNECTED (2,487 mA) e STREAMING
+  (2,734 mA), com o link entregando ~17 pacotes/s. O rádio **não** é o gargalo
 - **LED1 + UART: 1,35 mA** — já removidos
 
-Os picos de corrente ocorrem a **~2000/s, um por conversão do ADC**, com
-largura mediana de 20 µs — são a leitura I²C, não o rádio. Cada pico move
-~0,4 µC, então ~100 µF de bulk local mantém o trilho dentro de ~5 mV e a fonte
-(supercapacitor ou PMU) passa a ver só a média. **A placa não tem nenhum
+Os picos de corrente ocorrem **um por conversão do ADC** (~1000/s a 1 kSPS,
+~2000/s a 2 kSPS), com largura mediana de 20 µs — são a leitura I²C, não o
+rádio. Isso foi confirmado pela cadência: no estado conectado os picos acima de
+8 mA aparecem a cada 1,0 ms (o período do ADC), enquanto os eventos de rádio,
+visíveis só acima de 16 mA, seguem o intervalo de conexão de ~97 ms. Cada pico
+move ~0,4 µC, então ~100 µF de bulk local mantém o trilho dentro de ~5 mV e a
+fonte (supercapacitor ou PMU) passa a ver só a média. **A placa não tem nenhum
 capacitor de bulk hoje** — o maior é 220 nF.
 
 ### Otimizações implementadas
@@ -618,7 +643,12 @@ capacitor de bulk hoje** — o maior é 220 nF.
 5. ✅ LED1 e UART0 desligados
 6. ✅ Pinos configurados no início do `main()` (evita LEDs acesos no boot)
 7. ⬜ DC/DC do nRF52840 — ainda desabilitado (`POWER_CONFIG_DEFAULT_DCDCEN 0`)
-8. ⬜ `ads112c04_powerdown()` quando desconectado — existe e nunca é chamado
+8. ✅ **Power-down do ADS112C04 quando desconectado** — o ADVERTISING caiu de
+   2,52 para 1,54 mA (−39%) e a autonomia projetada subiu de 151 para 238 h.
+   O handler BLE só sinaliza a intenção; a transição I²C (bloqueante) acontece
+   no loop principal, porque o handler roda em contexto de interrupção. Ao
+   retomar, o filtro IIR e o FIFO são zerados — sem isso o primeiro trecho
+   após a pausa sairia contaminado por amostras de antes dela
 9. ⬜ TWIM com EasyDMA disparado por PPI (hoje usa o driver legado `nrfx_twi`)
 
 ## 🔬 Ferramental de medição
@@ -634,6 +664,8 @@ acima:
 | `voltage_sweep.py` | Mede corrente e potência a cada tensão de alimentação |
 | `analyze.py` / `figures.py` / `report_pdf.py` | Estatísticas, figuras e o relatório em PDF |
 | `emg_validate.py` | Valida que o stream é sinal real (taxa, continuidade, espectro) |
+| `export_data.py` | Exporta corrente vs tempo por janela de estados, preservando o RMS na decimação |
+| `report_ensaio2.py` | Relatório da janela de operação: média vs RMS e inventário dos dados entregues |
 
 ```bash
 pip install -r power_profiling/requirements.txt
@@ -647,10 +679,27 @@ python power_profiling/run_bench.py --port COM8 --voltage-mv 3300
 - **A escrita BLE de ganho é no-op.** `on_write` em `ble_emg_service.c` valida e
   loga o valor recebido mas nunca atribui `gain_level`, então o DS3502 fica no
   valor de boot. O caminho I²C funciona; falta o `gain_level = new_gain`.
-- **~8% dos blocos de 60 amostras são descartados** quando a fila de
-  notificações da SoftDevice enche. O host não consegue detectar isso
+- **~8% dos blocos de 60 amostras são descartados a 2 kSPS** quando a fila de
+  notificações da SoftDevice enche. **A 1 kSPS isso desaparece:** medido pelo
+  contador do firmware, `g_block_drop_count` fica em 0 e as 1015 conversões/s
+  viram 16,9 notificações/s (= 1014 amostras/s). O host não detecta perda
   diretamente porque o pacote não tem número de sequência — a detecção atual é
   por continuidade do sinal (o filtro IIR mantém estado entre pacotes).
+- **A banda RE_ADVERTISING da bancada não mede advertising.** O central no
+  Windows não derruba o link ao chamar `disconnect()`: a sessão WinRT só é
+  liberada quando o **processo** do central termina, e o `run_bench` não pode
+  terminar porque é ele que mantém o stream da PPK2 vivo. Enquanto a aquisição
+  rodava sempre isso era invisível — advertising e conectado custavam o mesmo.
+  Com o power-down do ADC as duas passaram a diferir ~1 mA, e a banda ficou
+  medindo o estado conectado. `analyze.py` agora **detecta e avisa** quando
+  RE_ADVERTISING divergir de ADVERTISING mais de 15%. A banda ADVERTISING é a
+  correta, e a janela conectado+streaming não é afetada.
+- **A leitura pré-run da taxa de aquisição virou inútil com o power-down.** Ela
+  é feita com o dispositivo desconectado, e nesse estado o ADC está justamente
+  dormindo — o valor correto passou a ser 0 S/s. Enquanto o `run_bench` não
+  medir isso dentro de uma conexão, a taxa tem de ser obtida à parte
+  (`fw_counters.py --watch` com um link ativo) ou a análise espectral cai para a
+  taxa de *entrega*, ~3% abaixo da de aquisição.
 - **A UART não é um caminho de dados.** Está desabilitada, e mesmo habilitada
   o TX (P1.11) não está conectado na PCB. BLE é o único caminho.
 - **`esp_dongle_ble/` está obsoleto** — nome e UUIDs do protótipo Arduino

@@ -74,6 +74,25 @@
 #define FIFO_SIZE         64
 #define UART_BUFFER_SIZE  16
 
+// === Aquisicao sob demanda ===
+//
+// A aquisicao custa ~4,1 mA dos ~6,8 mA totais a 5 V (medido comparando o
+// transiente de partida, 2,69 mA antes do ADC ser configurado, com o regime,
+// 6,81 mA). E ela rodava IGUAL estando desconectado - que e justamente o
+// estado que domina o duty cycle real de um wearable. Agora o ADS112C04entra
+// em power-down quando nao ha conexao BLE.
+//
+// g_acq_should_run e setado no handler de eventos BLE, que roda em CONTEXTO DE
+// INTERRUPCAO (NRF_SDH_DISPATCH_MODEL 0). O I2C deste projeto e bloqueante,
+// entao fazer a transicao ali dentro travaria a SoftDevice por ~100 us ou
+// mais. Por isso o handler apenas sinaliza o estado desejado e o loop
+// principal reconcilia com o estado real.
+volatile bool     g_acq_should_run  = false;  // desejado (setado na ISR do BLE)
+volatile uint32_t g_acq_running     = 0;      // real (legivel via J-Link)
+volatile uint32_t g_acq_start_count = 0;
+volatile uint32_t g_acq_stop_count  = 0;
+volatile uint32_t g_acq_error_count = 0;      // falha de I2C na transicao
+
 // === Economia de energia: UART e LEDs desligados ===
 //
 // ENABLE_UART = 0 desliga a UART0 por completo. Motivos:
@@ -339,6 +358,10 @@ static void ble_evt_handler(ble_evt_t const * p_ble_evt, void * p_context)
             m_emg_service.conn_handle = m_conn_handle;
             NRF_LOG_INFO("EMG service connection handle assigned");
 
+            // Pede a retomada da aquisicao. Nao faz o I2C aqui: este handler
+            // roda em contexto de interrupcao e o I2C do projeto e bloqueante.
+            g_acq_should_run = true;
+
             // Mantém 1M PHY — menor consumo; throughput de 120 bytes/100ms é suficiente
             NRF_LOG_INFO("Connected on 1M PHY (power-saving mode)");
 
@@ -352,6 +375,10 @@ static void ble_evt_handler(ble_evt_t const * p_ble_evt, void * p_context)
 
             m_conn_handle = BLE_CONN_HANDLE_INVALID;
             m_emg_service.conn_handle = BLE_CONN_HANDLE_INVALID;
+
+            // Sem conexao ninguem consome as amostras: pede o power-down do
+            // ADC. A transicao I2C acontece no loop principal.
+            g_acq_should_run = false;
             // BUG FIX: aqui havia um APP_ERROR_CHECK(err_code) com err_code
             // NAO INICIALIZADO neste caminho (declarado no topo do handler e
             // nunca atribuido no caso DISCONNECTED). APP_ERROR_CHECK num valor
@@ -583,6 +610,15 @@ float butterworth_filter(float input) {
     return yv[4];
 }
 
+// Limpa o estado do filtro. Necessario ao retomar a aquisicao depois de um
+// power-down do ADC: o filtro e IIR e carrega estado entre amostras, entao sem
+// zerar ele o primeiro trecho apos a retomada sai contaminado pelas amostras
+// de antes da pausa.
+void butterworth_reset(void) {
+    for (int i = 0; i <= NZEROS; i++) xv[i] = 0.0f;
+    for (int i = 0; i <= NPOLES; i++) yv[i] = 0.0f;
+}
+
 
 #define ADC_FULL_SCALE 32768  // pois o range vai de -32768 a +32767
 #define VREF           5.0f
@@ -682,6 +718,14 @@ bool fifo_pop(int16_t *value) {
     *value = fifo[fifo_tail];
     fifo_tail = (fifo_tail + 1) % FIFO_SIZE;
     return true;
+}
+
+// Descarta o conteudo do FIFO. Usado ao retomar a aquisicao: sem isso, as
+// amostras que sobraram de antes da pausa seriam enviadas como se fossem
+// contiguas com as novas, criando uma descontinuidade invisivel no meio do
+// sinal.
+void fifo_reset(void) {
+    fifo_tail = fifo_head;
 }
 
 // === I2C Setup ===
@@ -940,6 +984,13 @@ int main(void) {
 
     g_init_status |= 16u;
 
+    // ads112c04_configure_raw_mode() termina com um START, entao o ADC sai do
+    // init convertendo. Marcamos isso como o estado real; g_acq_should_run
+    // segue false (o dispositivo nasce desconectado), e a primeira iteracao do
+    // loop coloca o ADC em power-down. Assim o ADVERTISING - o estado que
+    // domina o duty cycle - ja nasce sem o custo da aquisicao.
+    g_acq_running = (g_init_status & 4u) ? 1u : 0u;
+
     while (1)
     {
         g_loop_count++;
@@ -955,6 +1006,33 @@ int main(void) {
             }
         }
 
+        // Reconcilia o estado da aquisicao com o que o handler BLE pediu.
+        // Fica aqui, e nao na ISR, porque o I2C e bloqueante.
+        if (g_acq_should_run && !g_acq_running) {
+            // POWERDOWN preserva os registradores de configuracao do
+            // ADS112C04, entao acordar e so um START/SYNC - nao precisa
+            // reconfigurar. A primeira conversao fica pronta em ~1 periodo.
+            if (ads112c04_start(&m_twi)) {
+                butterworth_reset();   // filtro IIR: nao arrastar estado velho
+                fifo_reset();          // nem amostras de antes da pausa
+                packet_index = 0;
+                g_drdy_flag = false;
+                g_acq_running = 1;
+                g_acq_start_count++;
+                NRF_LOG_INFO("Aquisicao retomada");
+            } else {
+                g_acq_error_count++;
+            }
+        } else if (!g_acq_should_run && g_acq_running) {
+            if (ads112c04_powerdown(&m_twi)) {
+                g_acq_running = 0;
+                g_acq_stop_count++;
+                NRF_LOG_INFO("Aquisicao em power-down (sem conexao)");
+            } else {
+                g_acq_error_count++;
+            }
+        }
+
         // Le o ADC apenas quando o DRDY# sinalizou conversao nova. Se o DRDY
         // nao estiver configurado (falha no gpio_init), cai no comportamento
         // antigo de ler a cada iteracao, para nao perder a capacidade de
@@ -963,7 +1041,7 @@ int main(void) {
         if (drdy_ready) {
             g_drdy_flag = false;
         }
-        if (drdy_ready || !(g_init_status & 32u))
+        if (g_acq_running && (drdy_ready || !(g_init_status & 32u)))
         {
             if (ads112c04_read_data(&m_twi, &raw_data))
             {

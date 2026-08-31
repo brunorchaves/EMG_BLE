@@ -149,7 +149,11 @@ async def run_bench(
             ),
             encoding="utf-8",
         )
-    except Exception as e:  # noqa: BLE001
+    # SystemExit entra aqui de proposito: a leitura dos contadores e um dado
+    # AUXILIAR (anota a taxa de aquisicao). Nada nela justifica abortar um
+    # ensaio de 5 minutos, e um helper que chame sys.exit por conta propria
+    # escaparia de um `except Exception` puro.
+    except (Exception, SystemExit) as e:  # noqa: BLE001
         print(f"aviso: nao consegui medir a taxa de aquisicao: {e}", file=sys.stderr)
     finally:
         # volta a desligar: o run tem de comecar do estado OFF para medir o

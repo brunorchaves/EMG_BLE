@@ -23,7 +23,7 @@
 // 0 -> 1000 SPS (~37% menos consumo, medido; exige os coeficientes de 1 kHz,
 //                que ja estao em main.c e sao selecionados por este flag)
 #ifndef ADS_TURBO_MODE
-#define ADS_TURBO_MODE 1
+#define ADS_TURBO_MODE 0
 #endif
 
 #if ADS_TURBO_MODE
