@@ -209,8 +209,13 @@ crc32    esperado cb4abf10 calculado cb4abf10  OK
 `sine 100` e `sweep` responderam certo (degrau avançou 10,00 → 12,59 Hz nos
 2 s esperados). **Os passos 2–4 acima (amplitude no multímetro, período no
 osciloscópio) ainda não foram feitos** — exigem instrumento físico na
-bancada. A placa ficou em `loop`, tocando sem parar (120 laços em 794 s de
-uptime na última checagem), pronta para o Ensaio 3 de manhã.
+bancada. A placa ficou em `loop`, pronta para o Ensaio 3 de manhã.
+
+Nota: o contador de `loops`/`uptime` do `status` zera a cada reset da MCU -
+reparado que um `usbipd detach`/`attach` no host chega a pulsar o reset do
+alvo pelo ST-LINK. Não é problema (a tabela na flash não muda, só reinicia o
+laço do zero), mas não estranhe o contador voltar a 0 depois de manipular o
+USB pelo WSL.
 
 **Para a sessão de amanhã (E3 — dataset × clínico × placa, osciloscópio):**
 checklist completo em [TRES_ENSAIOS_SINAL.pdf](../TRES_ENSAIOS_SINAL.pdf) §E3.
