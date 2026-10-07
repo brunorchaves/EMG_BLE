@@ -1,0 +1,1043 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Ensaios sEMG com Supercapacitor</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Serif:ital,wght@0,400;0,500;0,600;1,400&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+<style>
+  :root{
+    --paper:#fbfcfd;
+    --surface:#f0f4f8;
+    --surface-2:#e6ecf3;
+    --ink:#151c26;
+    --ink-2:#3d4a5c;
+    --ink-3:#6b7889;
+    --rule:#d3dce6;
+    --rule-strong:#aebccc;
+    --navy:#1c3f6e;
+    --navy-soft:#e8eff7;
+    --amber:#a85a12;
+    --amber-soft:#fbeedd;
+    --red:#9c2429;
+    --red-soft:#fbe8e8;
+    --green:#2b6349;
+    --green-soft:#e4f0ea;
+    --shadow:0 1px 2px rgba(21,28,38,.06), 0 8px 24px -16px rgba(21,28,38,.28);
+    --sans:"IBM Plex Sans","Segoe UI",system-ui,sans-serif;
+    --serif:"IBM Plex Serif",Georgia,"Times New Roman",serif;
+    --mono:"IBM Plex Mono","Cascadia Mono",Consolas,monospace;
+    color-scheme:light;
+  }
+  @media (prefers-color-scheme:dark){
+    :root:not([data-theme="light"]){
+      --paper:#0e131a;
+      --surface:#161d27;
+      --surface-2:#1e2733;
+      --ink:#e6ecf3;
+      --ink-2:#b3c0d0;
+      --ink-3:#8391a3;
+      --rule:#2a3441;
+      --rule-strong:#3f4c5c;
+      --navy:#8ab4e8;
+      --navy-soft:#17253a;
+      --amber:#e0a05a;
+      --amber-soft:#2c2016;
+      --red:#e88a8d;
+      --red-soft:#2e1719;
+      --green:#7fc3a3;
+      --green-soft:#152a21;
+      --shadow:0 1px 2px rgba(0,0,0,.4), 0 8px 24px -16px rgba(0,0,0,.7);
+      color-scheme:dark;
+    }
+  }
+  :root[data-theme="dark"]{
+    --paper:#0e131a;
+    --surface:#161d27;
+    --surface-2:#1e2733;
+    --ink:#e6ecf3;
+    --ink-2:#b3c0d0;
+    --ink-3:#8391a3;
+    --rule:#2a3441;
+    --rule-strong:#3f4c5c;
+    --navy:#8ab4e8;
+    --navy-soft:#17253a;
+    --amber:#e0a05a;
+    --amber-soft:#2c2016;
+    --red:#e88a8d;
+    --red-soft:#2e1719;
+    --green:#7fc3a3;
+    --green-soft:#152a21;
+    --shadow:0 1px 2px rgba(0,0,0,.4), 0 8px 24px -16px rgba(0,0,0,.7);
+    color-scheme:dark;
+  }
+
+  *{box-sizing:border-box}
+  body{
+    margin:0;
+    background:var(--paper);
+    color:var(--ink);
+    font-family:var(--serif);
+    font-size:16.5px;
+    line-height:1.62;
+    -webkit-font-smoothing:antialiased;
+  }
+  .wrap{
+    max-width:1180px;
+    margin:0 auto;
+    padding:0 28px 96px;
+    display:grid;
+    grid-template-columns:1fr;
+    gap:0 56px;
+  }
+  @media (min-width:1000px){
+    .wrap{grid-template-columns:216px minmax(0,1fr)}
+    .masthead{grid-column:1/-1}
+  }
+
+  /* ---------- masthead ---------- */
+  .masthead{
+    border-bottom:2px solid var(--ink);
+    padding:44px 0 26px;
+    margin-bottom:38px;
+  }
+  .eyebrow{
+    font-family:var(--mono);
+    font-size:11.5px;
+    font-weight:500;
+    letter-spacing:.13em;
+    text-transform:uppercase;
+    color:var(--amber);
+    margin:0 0 16px;
+    display:flex;
+    flex-wrap:wrap;
+    gap:6px 14px;
+    align-items:center;
+  }
+  .eyebrow span:not(:last-child)::after{content:" ·";color:var(--ink-3);margin-left:14px}
+  h1{
+    font-family:var(--sans);
+    font-weight:700;
+    font-size:clamp(30px,5.2vw,50px);
+    line-height:1.04;
+    letter-spacing:-.024em;
+    margin:0 0 18px;
+    text-wrap:balance;
+    max-width:22ch;
+  }
+  .standfirst{
+    font-size:19px;
+    line-height:1.52;
+    color:var(--ink-2);
+    max-width:60ch;
+    margin:0 0 26px;
+  }
+  .standfirst b{color:var(--ink);font-weight:600}
+  .sources{
+    font-family:var(--mono);
+    font-size:12px;
+    line-height:1.75;
+    color:var(--ink-3);
+    border-left:2px solid var(--rule-strong);
+    padding-left:14px;
+    max-width:80ch;
+  }
+  .sources b{color:var(--ink-2);font-weight:500}
+
+  /* ---------- rail ---------- */
+  .rail{display:none}
+  @media (min-width:1000px){
+    .rail{
+      display:block;
+      align-self:start;
+      position:sticky;
+      top:24px;
+      font-family:var(--sans);
+      font-size:13px;
+      padding-bottom:40px;
+    }
+  }
+  .rail h2{
+    font-family:var(--mono);
+    font-size:10.5px;
+    letter-spacing:.13em;
+    text-transform:uppercase;
+    color:var(--ink-3);
+    font-weight:500;
+    margin:0 0 12px;
+  }
+  .rail ol{list-style:none;margin:0;padding:0;display:flex;flex-direction:column}
+  .rail li{border-top:1px solid var(--rule)}
+  .rail li:last-child{border-bottom:1px solid var(--rule)}
+  .rail a{
+    display:grid;
+    grid-template-columns:1.6em 1fr;
+    gap:8px;
+    padding:8px 0;
+    color:var(--ink-2);
+    text-decoration:none;
+    line-height:1.35;
+  }
+  .rail a:hover{color:var(--navy)}
+  .rail a span{font-family:var(--mono);color:var(--ink-3);font-size:11.5px}
+  .rail a:hover span{color:var(--amber)}
+
+  /* ---------- sections ---------- */
+  section{margin:0 0 60px;scroll-margin-top:20px}
+  h2.sec{
+    font-family:var(--sans);
+    font-size:clamp(22px,3vw,29px);
+    font-weight:600;
+    letter-spacing:-.018em;
+    line-height:1.14;
+    margin:0 0 8px;
+    text-wrap:balance;
+    display:grid;
+    grid-template-columns:auto 1fr;
+    gap:14px;
+    align-items:baseline;
+  }
+  h2.sec i{
+    font-style:normal;
+    font-family:var(--mono);
+    font-size:.52em;
+    font-weight:600;
+    color:var(--amber);
+    letter-spacing:0;
+  }
+  .dek{color:var(--ink-3);font-size:15.5px;margin:0 0 24px;max-width:66ch;font-style:italic}
+  h3{
+    font-family:var(--sans);
+    font-size:17.5px;
+    font-weight:600;
+    letter-spacing:-.008em;
+    margin:34px 0 10px;
+    text-wrap:balance;
+  }
+  h3 em{font-style:normal;font-family:var(--mono);font-size:.82em;color:var(--ink-3);font-weight:500;margin-right:.5em}
+  h4{
+    font-family:var(--sans);
+    font-size:15px;
+    font-weight:600;
+    margin:24px 0 8px;
+    color:var(--ink-2);
+  }
+  p{margin:0 0 14px;max-width:68ch}
+  ul,ol{margin:0 0 16px;padding-left:1.35em;max-width:66ch}
+  li{margin-bottom:7px}
+  li::marker{color:var(--ink-3)}
+  a{color:var(--navy);text-decoration-thickness:1px;text-underline-offset:2px}
+  code,.m{
+    font-family:var(--mono);
+    font-size:.855em;
+    background:var(--surface-2);
+    padding:.1em .34em;
+    border-radius:2px;
+    color:var(--ink);
+    white-space:nowrap;
+  }
+  strong{font-weight:600}
+  hr{border:0;border-top:1px solid var(--rule);margin:44px 0}
+
+  /* ---------- tables ---------- */
+  .tw{overflow-x:auto;margin:0 0 20px;border-top:2px solid var(--ink);border-bottom:1px solid var(--rule-strong)}
+  table{border-collapse:collapse;width:100%;font-family:var(--sans);font-size:14px;min-width:520px}
+  th{
+    text-align:left;
+    font-family:var(--mono);
+    font-size:10.5px;
+    font-weight:500;
+    letter-spacing:.1em;
+    text-transform:uppercase;
+    color:var(--ink-3);
+    padding:9px 14px 9px 0;
+    border-bottom:1px solid var(--rule-strong);
+    vertical-align:bottom;
+    white-space:nowrap;
+  }
+  td{
+    padding:11px 14px 11px 0;
+    border-bottom:1px solid var(--rule);
+    vertical-align:top;
+    color:var(--ink-2);
+    line-height:1.44;
+  }
+  tr:last-child td{border-bottom:0}
+  td:first-child{color:var(--ink);font-weight:500}
+  td.n,th.n{text-align:right;font-variant-numeric:tabular-nums;font-family:var(--mono);font-size:13px;padding-right:0}
+  /* só a coluna numérica final encosta na borda; as intermediárias precisam de
+     goteira, senão o número cola no texto da coluna seguinte */
+  td.n:not(:last-child),th.n:not(:last-child){padding-right:18px}
+  td.n{color:var(--ink)}
+  tbody tr:hover td{background:var(--surface)}
+  table code{background:none;padding:0;font-size:.9em}
+  .tnote{font-size:13.5px;color:var(--ink-3);margin:-8px 0 20px;max-width:66ch;font-style:italic}
+  .tnote strong{font-style:normal}
+
+  /* verdict chips */
+  .chip{
+    display:inline-block;
+    font-family:var(--mono);
+    font-size:10.5px;
+    font-weight:600;
+    letter-spacing:.07em;
+    text-transform:uppercase;
+    padding:3px 7px;
+    border-radius:2px;
+    white-space:nowrap;
+  }
+  .chip.redo{background:var(--red-soft);color:var(--red);box-shadow:inset 0 0 0 1px currentColor}
+  .chip.soft{background:var(--amber-soft);color:var(--amber);box-shadow:inset 0 0 0 1px currentColor}
+  .chip.new{background:var(--navy-soft);color:var(--navy);box-shadow:inset 0 0 0 1px currentColor}
+  .chip.keep{background:var(--green-soft);color:var(--green);box-shadow:inset 0 0 0 1px currentColor}
+
+  /* ---------- callouts ---------- */
+  .call{
+    border-left:3px solid var(--amber);
+    background:var(--amber-soft);
+    padding:18px 22px;
+    margin:0 0 26px;
+    border-radius:0 3px 3px 0;
+  }
+  .call.grave{border-color:var(--red);background:var(--red-soft)}
+  .call.good{border-color:var(--green);background:var(--green-soft)}
+  .call p{margin:0 0 10px;max-width:64ch}
+  .call p:last-child{margin:0}
+  .call .lab{
+    display:block;
+    font-family:var(--mono);
+    font-size:10.5px;
+    font-weight:600;
+    letter-spacing:.11em;
+    text-transform:uppercase;
+    color:var(--amber);
+    margin-bottom:7px;
+  }
+  .call.grave .lab{color:var(--red)}
+  .call.good .lab{color:var(--green)}
+
+  /* ---------- arms (A/B/C) ---------- */
+  .arms{display:flex;flex-direction:column;gap:0;margin:0 0 24px;border-top:2px solid var(--ink)}
+  .arm{
+    display:grid;
+    grid-template-columns:auto 1fr;
+    gap:0 20px;
+    padding:20px 0;
+    border-bottom:1px solid var(--rule);
+    align-items:start;
+  }
+  .arm .key{
+    font-family:var(--sans);
+    font-weight:700;
+    font-size:26px;
+    line-height:1;
+    color:var(--amber);
+    width:1.4em;
+    letter-spacing:-.02em;
+  }
+  .arm h4{margin:0 0 6px;font-size:16px;color:var(--ink)}
+  .arm p{margin:0 0 8px;font-size:15.5px}
+  .arm p:last-child{margin:0}
+  .arm .out{font-family:var(--mono);font-size:12.5px;color:var(--ink-3)}
+
+  /* ---------- flow chain ---------- */
+  .chain{
+    display:flex;
+    flex-wrap:wrap;
+    align-items:center;
+    gap:7px;
+    font-family:var(--mono);
+    font-size:12px;
+    background:var(--surface);
+    border:1px solid var(--rule);
+    padding:16px;
+    margin:0 0 8px;
+    border-radius:3px;
+    overflow-x:auto;
+  }
+  .chain b{
+    font-weight:500;
+    background:var(--paper);
+    border:1px solid var(--rule-strong);
+    padding:6px 9px;
+    border-radius:2px;
+    white-space:nowrap;
+    color:var(--ink);
+  }
+  .chain b.hi{border-color:var(--amber);color:var(--amber);background:var(--amber-soft)}
+  .chain i{font-style:normal;color:var(--ink-3);font-size:13px}
+
+  /* ---------- chart ---------- */
+  .chart{
+    border-top:2px solid var(--ink);
+    border-bottom:1px solid var(--rule-strong);
+    padding:22px 0 6px;
+    margin:0 0 12px;
+  }
+  .chart .ct{
+    font-family:var(--mono);
+    font-size:10.5px;
+    letter-spacing:.1em;
+    text-transform:uppercase;
+    color:var(--ink-3);
+    margin:0 0 20px;
+  }
+  .bars{display:flex;flex-direction:column;gap:16px}
+  .bar{display:grid;grid-template-columns:minmax(120px,1.1fr) minmax(0,3fr);gap:0 16px;align-items:center}
+  .bar .bl{font-family:var(--sans);font-size:13.5px;color:var(--ink-2);line-height:1.3}
+  .bar .bl small{display:block;font-family:var(--mono);font-size:11px;color:var(--ink-3)}
+  .track{position:relative;height:26px}
+  .fill{
+    position:absolute;left:0;top:0;bottom:0;
+    background:var(--navy);
+    border-radius:0 2px 2px 0;
+    display:flex;align-items:center;justify-content:flex-end;
+    padding-right:8px;
+    min-width:44px;
+  }
+  .fill span{font-family:var(--mono);font-size:12px;font-weight:600;color:var(--paper);font-variant-numeric:tabular-nums}
+  .tick{
+    position:absolute;top:-2px;bottom:-2px;width:2px;
+    background:var(--amber);
+  }
+  .axis{
+    display:grid;
+    grid-template-columns:minmax(120px,1.1fr) minmax(0,3fr);
+    gap:0 16px;
+    margin-top:14px;
+    padding-top:8px;
+  }
+  .axis .ax{
+    position:relative;height:16px;border-top:1px solid var(--rule-strong);
+    font-family:var(--mono);font-size:11px;color:var(--ink-3);
+  }
+  .axis .ax u{position:absolute;top:3px;text-decoration:none;transform:translateX(-50%);white-space:nowrap}
+  .axis .ax u:first-child{transform:none}
+  .legend{
+    display:flex;flex-wrap:wrap;gap:6px 20px;
+    font-family:var(--mono);font-size:11.5px;color:var(--ink-3);
+    margin:16px 0 0;
+  }
+  .legend i{display:inline-block;width:18px;height:9px;vertical-align:middle;margin-right:6px;border-radius:1px}
+  .legend i.a{background:var(--navy)}
+  .legend i.b{background:var(--amber);width:3px;height:14px}
+
+  /* formulas */
+  pre{
+    font-family:var(--mono);
+    font-size:13.5px;
+    background:var(--surface);
+    border:1px solid var(--rule);
+    border-left:3px solid var(--rule-strong);
+    padding:14px 18px;
+    margin:0 0 18px;
+    overflow-x:auto;
+    line-height:1.7;
+    color:var(--ink);
+    border-radius:0 3px 3px 0;
+  }
+
+  /* questions */
+  .qs{list-style:none;padding:0;margin:0;border-top:2px solid var(--ink);max-width:none}
+  .qs li{
+    display:grid;grid-template-columns:2.2em 1fr;gap:0 12px;
+    padding:15px 0;border-bottom:1px solid var(--rule);margin:0;
+    max-width:none;
+  }
+  .qs li b{
+    font-family:var(--mono);font-size:13px;font-weight:600;color:var(--amber);
+  }
+  .qs li div{max-width:64ch}
+
+  footer{
+    border-top:2px solid var(--ink);
+    padding-top:22px;
+    font-family:var(--mono);
+    font-size:12px;
+    line-height:1.8;
+    color:var(--ink-3);
+  }
+  footer b{color:var(--ink-2);font-weight:500}
+  :focus-visible{outline:2px solid var(--amber);outline-offset:3px;border-radius:2px}
+  @media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+
+  /* ---------- impressão / PDF ---------- */
+  @page{size:A4;margin:17mm 16mm 16mm}
+  @media print{
+    :root{
+      --paper:#fff;--surface:#f2f5f8;--surface-2:#e8eef4;
+      --ink:#141b25;--ink-2:#3a4757;--ink-3:#66737f;
+      --rule:#ccd6e0;--rule-strong:#9dabbb;
+      --navy:#1c3f6e;--navy-soft:#e8eff7;
+      --amber:#95500f;--amber-soft:#fbeedd;
+      --red:#8d1f24;--red-soft:#fbe8e8;
+      --green:#24573f;--green-soft:#e4f0ea;
+      --shadow:none;
+      color-scheme:light;
+    }
+    *{-webkit-print-color-adjust:exact;print-color-adjust:exact}
+    body{background:#fff;font-size:9.9pt;line-height:1.5}
+    .wrap{display:block;max-width:none;margin:0;padding:0}
+    .rail{display:none!important}
+    .masthead{padding:0 0 14pt;margin-bottom:20pt}
+    h1{font-size:27pt;max-width:none}
+    .standfirst{font-size:11.5pt;margin-bottom:14pt}
+    .sources{font-size:7.8pt;line-height:1.6}
+    section{margin-bottom:20pt}
+    h2.sec{font-size:16pt;break-after:avoid;break-inside:avoid;margin-top:6pt}
+    .dek{font-size:10pt;margin-bottom:12pt}
+    h3{font-size:12pt;margin:16pt 0 6pt;break-after:avoid}
+    h4{font-size:10.5pt;margin:12pt 0 5pt;break-after:avoid}
+    p,ul,ol{max-width:none}
+    p{margin-bottom:8pt}
+    /* tabelas quebram entre linhas, nunca no meio de uma */
+    .tw{overflow:visible;margin-bottom:12pt}
+    table{min-width:0;font-size:8.6pt}
+    thead{display:table-header-group}
+    tr,.arm,.bar{break-inside:avoid}
+    th{font-size:7.4pt;padding:6pt 9pt 5pt 0}
+    td{padding:6pt 9pt 6pt 0}
+    td.n,th.n{font-size:8.4pt}
+    td.n:not(:last-child),th.n:not(:last-child){padding-right:14pt}
+    tbody tr:hover td{background:transparent}
+    .tnote{font-size:8.6pt;margin:-4pt 0 12pt}
+    .call,.chart,pre,.chain{break-inside:avoid;margin-bottom:14pt}
+    .chain{overflow:visible;font-size:8pt;padding:10pt}
+    .chain b{padding:4pt 6pt}
+    .call{padding:12pt 15pt}
+    pre{font-size:9pt;padding:10pt 14pt}
+    code,.m{white-space:normal;background:var(--surface-2)}
+    a{color:var(--ink);text-decoration:none}
+    .arms{margin-bottom:14pt}
+    .arm{padding:12pt 0}
+    .arm .key{font-size:19pt}
+    .arm p{font-size:9.9pt}
+    .fill span{font-size:8.4pt}
+    .qs li{padding:9pt 0}
+    .qs li div{max-width:none}
+    footer{padding-top:14pt;font-size:8pt;break-inside:avoid}
+  }
+</style>
+
+</head>
+<body>
+<div class="wrap">
+
+  <header class="masthead">
+    <p class="eyebrow"><span>LEB · UFMG</span><span>Revisão técnica</span><span>Setembro de 2026</span></p>
+    <h1>Ensaios sEMG com Supercapacitor</h1>
+    <p class="standfirst">O que sustentou o artigo do SEB 2025, o que os dados antigos <b>não</b> sustentam, e o plano de bancada para o artigo 2 — com o veredito ensaio por ensaio, os materiais de cada um e a única fase que realmente precisa do laboratório.</p>
+    <p class="sources"><b>Documento irmão —</b> <code>BANCADA_ENSAIOS.pdf</code>, o <em>como</em>: passo a passo de cada ensaio, projeto do circuito de condicionamento com esquemático, e lista de compras. Este aqui é o <em>o quê</em> e o <em>por quê</em>.</p>
+    <p class="sources"><b>Fontes lidas —</b> <code>663744.pdf</code> (artigo SEB 2025) · <code>Protocolo_Experimental_sEMG_Supercapacitor.pdf</code> (protocolo do Robert, 20 pp., 8 ensaios) · <code>sEMG_Shematic_versao_final.PDF</code> (placa nova, 3 folhas) · <code>Schematic_EMG-schematic-v2.0</code> (placa do artigo) · <code>README.md</code>, firmware, e os dados em <code>data/</code>, <code>collectData/</code>, <code>emg_clinical/</code>, <code>power_profiling/</code>.</p>
+  </header>
+
+  <nav class="rail" aria-label="Seções">
+    <h2>Neste documento</h2>
+    <ol>
+      <li><a href="#veredito"><span>0</span>Veredito</a></li>
+      <li><a href="#artigo"><span>1</span>O que foi feito</a></li>
+      <li><a href="#problemas"><span>2</span>Problemas nos dados</a></li>
+      <li><a href="#hardware"><span>3</span>O hardware novo</a></li>
+      <li><a href="#bringup"><span>4</span>Riscos de bring-up</a></li>
+      <li><a href="#autonomia"><span>5</span>Autonomia</a></li>
+      <li><a href="#protocolo"><span>6</span>Protocolo do Robert</a></li>
+      <li><a href="#materiais"><span>7</span>Materiais</a></li>
+      <li><a href="#ordem"><span>8</span>Ordem de execução</a></li>
+      <li><a href="#perguntas"><span>9</span>Perguntas</a></li>
+    </ol>
+  </nav>
+
+  <main>
+
+    <!-- 0 -->
+    <section id="veredito">
+      <h2 class="sec"><i>0</i>Veredito em uma tabela</h2>
+      <div class="tw">
+        <table>
+          <thead><tr><th>Ensaio do artigo</th><th>Veredito</th><th>Por quê</th><th>Onde</th><th>Esforço</th></tr></thead>
+          <tbody>
+            <tr>
+              <td><b>A</b> — digitalizar o EMG clínico com ADS112C04 externo</td>
+              <td><span class="chip redo">Refazer</span></td>
+              <td>A base de tempo do rig antigo não existia (<a href="#problemas">§2.1</a>) — e o instrumento tem de mudar</td>
+              <td>Laboratório</td>
+              <td>1 sessão</td>
+            </tr>
+            <tr>
+              <td><b>B</b> — dataset UCI × clínico digitalizado</td>
+              <td><span class="chip keep">Recomputar</span></td>
+              <td>É pós-processamento; nenhum hardware entra</td>
+              <td>Mesa</td>
+              <td>horas</td>
+            </tr>
+            <tr>
+              <td><b>C</b> — dataset → DAC STM32 → condicionamento → sensor</td>
+              <td><span class="chip redo">Refazer</span></td>
+              <td>Base de tempo, e o trilho caiu de 5 V para 3,3 V (<a href="#hardware">§3</a>)</td>
+              <td>Mesa + Lab.</td>
+              <td>2 dias + 1 sessão</td>
+            </tr>
+            <tr>
+              <td><b>D</b> — consumo por estado (Tabela 2 do artigo)</td>
+              <td><span class="chip soft">80 % pronto</span></td>
+              <td>A bancada PPK2 já existe e roda; falta a placa nova</td>
+              <td>Mesa</td>
+              <td>1–2 dias</td>
+            </tr>
+            <tr>
+              <td>Supercapacitor — carga, descarga, autonomia</td>
+              <td><span class="chip new">Novo</span></td>
+              <td>Não existia no artigo, e é a novidade do artigo 2</td>
+              <td>Mesa</td>
+              <td>2 dias</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="call grave">
+        <span class="lab">A conclusão que mais importa</span>
+        <p>O que obriga a refazer os ensaios de sinal <b>não é</b> principalmente o hardware novo. É que os dados antigos <strong>não têm base de tempo válida</strong>. O eixo de frequência da Fig. 6 do artigo está errado por um fator entre 1,1 e 1,8 — e <strong>diferente para cada braço</strong> da comparação. Isso não se corrige em pós-processamento.</p>
+      </div>
+    </section>
+
+    <!-- 1 -->
+    <section id="artigo">
+      <h2 class="sec"><i>1</i>O que foi feito no artigo</h2>
+      <p class="dek">O artigo não mediu sEMG de voluntário. Reproduziu fisicamente um trecho de <em>sidekicking</em> de um dataset público e gravou essa reprodução em três caminhos.</p>
+
+      <div class="chain" role="img" aria-label="Cadeia do artigo: PC com dataset, DAC, eletrodos, pré-amplificação, filtros, ganho, ADC, BLE">
+        <b>PC · dataset</b><i>→</i><b class="hi">DAC</b><i>→</i><b>eletrodos</b><i>→</i><b>pré-amp INA317</b><i>→</i><b>HPF 20 Hz</b><i>→</i><b>LPF 482 Hz</b><i>→</i><b>ganho DS3502</b><i>→</i><b>ADS112C04</b><i>→</i><b>BLE</b>
+      </div>
+      <p class="tnote">A cadeia da Fig. 1 do artigo. O DAC é o que torna o ensaio repetível: o mesmo sinal conhecido entra nos três braços.</p>
+
+      <div class="arms">
+        <div class="arm">
+          <div class="key">A</div>
+          <div>
+            <h4>EMG clínico digitalizado externamente</h4>
+            <p>A saída analógica do EMG clínico do laboratório foi condicionada por um amplificador operacional — para caber na janela de entrada do conversor — e digitalizada por um <strong>ADS112C04 em placa externa</strong>, controlado por um ESP32 (<code>emg_clinical/</code>, ESP-IDF). Objetivo: pôr clínico e protótipo no mesmo formato, mesma resolução e, em teoria, mesma taxa.</p>
+            <p class="out">Saída → data/csvs_clinical/</p>
+          </div>
+        </div>
+        <div class="arm">
+          <div class="key">B</div>
+          <div>
+            <h4>Dataset como referência absoluta</h4>
+            <p><em>EMG Physical Action Data Set</em> (UCI, Theodoridis 2011; adquirido originalmente com sistema <strong>Delsys</strong> de 8 canais). Nenhum hardware envolvido: é o arquivo contra o qual A e C são comparados — o traço “Original Signal” da Fig. 5, com SNR de 10,7 dB.</p>
+            <p class="out">Saída → arquivo público, DOI 10.24432/C53W49</p>
+          </div>
+        </div>
+        <div class="arm">
+          <div class="key">C</div>
+          <div>
+            <h4>Dataset reproduzido para dentro do sensor próprio</h4>
+            <p>O trecho foi tocado pelo <strong>DAC de um STM32</strong>, passado por um <strong>circuito de condicionamento</strong> e injetado na entrada do sensor. O condicionamento resolvia três coisas ao mesmo tempo: levar o sinal do domínio do DAC (0–3,3 V, unipolar) para uma janela simétrica em torno da referência analógica da placa, atenuá-lo até a faixa de sEMG (0,01–6 mV pp) e apresentá-lo de forma diferencial aos pads dos eletrodos.</p>
+            <p class="out">Saída → data/csvs_proprietary/</p>
+          </div>
+        </div>
+      </div>
+
+      <h3>O quarto ensaio: consumo</h3>
+      <p>A Tabela 2 do artigo (OFF / IDLE / CONNECTED / TRANSMITTING, 5,0 V) veio de uma medição de corrente por estado. Hoje essa medição está <strong>reconstruída e muito melhor</strong> com a PPK2 — nove estados num único stream contínuo, relatório em PDF, contadores do firmware lidos por J-Link.</p>
+
+      <h4>O que cada braço produziu</h4>
+      <div class="tw">
+        <table>
+          <thead><tr><th>Braço</th><th class="n">SNR publicada</th></tr></thead>
+          <tbody>
+            <tr><td>B — dataset original</td><td class="n">10,7 dB</td></tr>
+            <tr><td>C — sistema proposto</td><td class="n">9,0 dB</td></tr>
+            <tr><td>A — sistema clínico</td><td class="n">12,7 dB</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p class="tnote">Mais a Fig. 5 (três sinais no tempo, envelope RMS de 50 ms, segmentos de contração detectados a 20 % do pico) e a Fig. 6 (resposta em frequência dos dois sistemas).</p>
+    </section>
+
+    <!-- 2 -->
+    <section id="problemas">
+      <h2 class="sec"><i>2</i>Três problemas nos dados antigos</h2>
+      <p class="dek">Isto não é pessimismo: é o que decide o que dá para reaproveitar.</p>
+
+      <h3><em>2.1</em>A base de tempo não existia</h3>
+      <p>Os dois braços de aquisição gravavam <strong>texto ASCII por porta serial a 115200 baud</strong>, e o script do PC coletava o que chegasse durante N segundos. Não havia timestamp, nem controle de taxa, nem relógio.</p>
+      <ul>
+        <li><code>collectData/colectData.py</code> — laço <code>while (time.time()-t0) &lt; TEMPO</code>, gravando o que veio.</li>
+        <li><code>emg_clinical/collectData.py</code> — fixa <code>EXPECTED_SAMPLE_RATE_HZ = 1000</code> e para em exatamente 20 000 amostras, <strong>independentemente do tempo decorrido</strong>.</li>
+        <li><code>emg_clinical/main/main.c</code> — faz <code>printf("%d\n", adc_raw)</code> seguido de <code>vTaskDelay(pdMS_TO_TICKS(1))</code>. Com o tick padrão do ESP-IDF em 100 Hz, esse delay arredonda para <strong>zero</strong>: o laço corre tão rápido quanto o <code>printf</code> permitir, lendo o ADC de forma assíncrona às conversões — repetindo e perdendo amostras sem aviso.</li>
+      </ul>
+      <p>A 115200 baud, uma linha <code>"12345\n"</code> custa ~7 bytes, o que dá um <strong>teto de ~1600 linhas/s</strong>. É exatamente onde os arquivos caem:</p>
+
+      <div class="tw">
+        <table>
+          <thead><tr><th>Arquivo</th><th class="n">Amostras</th><th class="n">Duração nominal</th><th class="n">Taxa real implícita</th></tr></thead>
+          <tbody>
+            <tr><td><code>biceps_10s_4_proprietary.csv</code></td><td class="n">11 119</td><td class="n">10 s</td><td class="n">~1112 S/s</td></tr>
+            <tr><td><code>thigh_5s_2_1x_proprietary.csv</code></td><td class="n">9 095</td><td class="n">5 s</td><td class="n">~1819 S/s</td></tr>
+            <tr><td><code>biceps_20s_2_clinical.csv</code></td><td class="n">20 000</td><td class="n">“20 s”</td><td class="n">desconhecida</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p class="tnote">E <code>data/processdata/processdata.py</code> assume <code>fs = 2000</code> para todos.</p>
+
+      <p>Consequências:</p>
+      <ul>
+        <li><strong>A resposta em frequência (Fig. 6) não é recuperável.</strong> Cada braço tem um erro de escala diferente, e a taxa real de cada arquivo não foi registrada.</li>
+        <li><strong>A janela de envelope de “50 ms” era de 90 ms</strong> no braço do bíceps proprietário (50 ms × 2000/1112).</li>
+        <li><strong>A SNR sobrevive melhor</strong> — é razão de amplitudes RMS e não depende fortemente da escala de tempo. Os 9,0 / 10,7 / 12,7 dB provavelmente estão na ordem certa. Mas a detecção de segmentos ativos, que usa a janela deslizante, fica deslocada.</li>
+      </ul>
+
+      <h3><em>2.2</em>Os dados antigos não são simultâneos</h3>
+      <p>O artigo descreve gravação <strong>simultânea</strong> pelo protótipo e pelo clínico. Os CSVs que sobraram no repositório não são isso: são contrações de bíceps e coxa, de durações diferentes (10 s vs 20 s), com nomes que não se pareiam. O material da sessão de <em>sidekicking</em> que gerou as Fig. 5 e 6 <strong>não está no repositório</strong> — é preciso pedir ao Robert.</p>
+
+      <h3><em>2.3</em>O firmware do artigo não amostrava a 2 kS/s</h3>
+      <p>Já documentado no README: no firmware da época <strong>não havia fonte de tempo governando a amostragem</strong>, e o ADC era lido cerca de uma vez por segundo. A Tabela 1 do artigo reivindica 2 kS/s. Isso hoje está corrigido — 1015 S/s medidos no modo padrão, 2042 S/s em turbo, com 0 % de conversões perdidas e taxa verificável por contadores em RAM.</p>
+    </section>
+
+    <!-- 3 -->
+    <section id="hardware">
+      <h2 class="sec"><i>3</i>O que mudou no hardware</h2>
+      <p class="dek">Comparando o esquemático do artigo (v2.0) com a versão final do Robert.</p>
+
+      <h3>O que <i>não</i> mudou — e é boa notícia</h3>
+      <p>A cadeia analógica é <strong>idêntica, componente por componente e valor por valor</strong>: INA317 com <code>R_G = 3 kΩ</code> (A<sub>v</sub> = 34,33); passa-alta Sallen-Key 220 nF / 36 kΩ, f<sub>c</sub> 20 Hz, A<sub>v</sub> 1,55; passa-baixa 1,5 kΩ / 220 nF, f<sub>c</sub> 482 Hz, A<sub>v</sub> 1,55; ganho ajustável DS3502 + MCP609 inversor, 2×–11×; ADS112C04 single-ended com referência em AVDD; e a mesma proteção de entrada (BAT54S, 1 MΩ / 56 kΩ / 2,2 kΩ).</p>
+      <div class="call good">
+        <span class="lab">Implicação</span>
+        <p>A função de transferência — banda 30–400 Hz, ganho total 166×–914× — <strong>não mudou</strong>. O <em>formato</em> do resultado do artigo deve se reproduzir. O que muda é o piso de ruído e o teto de saturação.</p>
+      </div>
+
+      <h3>A cadeia de alimentação, que é toda nova</h3>
+      <div class="chain" role="img" aria-label="Cadeia de alimentação nova: USB 5 V, carregador BQ25173, supercapacitor 1 F 5 V, chave de carga, conversor TPS63031, trilho 3V3">
+        <b>USB 5 V</b><i>→</i><b>BQ25173 · linear</b><i>→</i><b class="hi">supercap 1 F / 5 V</b><i>→</i><b>chave P-FET + botão</b><i>→</i><b>TPS63031 · buck-boost</b><i>→</i><b class="hi">3V3 = VCC</b>
+      </div>
+      <p class="tnote">Antes: conector externo e bateria Li-Ion 400 mAh @ 3,7 V com step-up, tudo fora da placa. O supercapacitor é o <code>KVR-5R0C105-R</code>.</p>
+
+      <div class="tw">
+        <table>
+          <thead><tr><th>Item</th><th>Artigo (v2.0)</th><th>Versão final</th><th>Consequência</th></tr></thead>
+          <tbody>
+            <tr><td>Trilho analógico VCC</td><td>5,0 V</td><td><strong>3,3 V</strong> (TPS63031)</td><td>teto de saturação −20 %, LSB −34 %</td></tr>
+            <tr><td>Referência analógica</td><td><strong>MAX6106</strong>, 2,048 V de precisão</td><td>divisor resistivo <strong>VCC/2 = 1,65 V</strong> + buffer MCP609</td><td>ratiométrica com o ADC (bom); sem PSRR de referência (ruim)</td></tr>
+            <tr><td>Chave de carga</td><td>não existia</td><td>DMP2035U + 2N7002 + botão <code>SW1</code> + sinal <code>PWR_OFF</code></td><td>novo comportamento de liga/desliga</td></tr>
+            <tr><td>Telemetria de tensão</td><td>não existia</td><td>divisor <code>R22/R26</code> → net <code>VCAP</code> → <strong>P0.03</strong></td><td>o firmware pode medir a própria carga</td></tr>
+            <tr><td>LEDs</td><td>2, ânodo no trilho de 5 V</td><td>2, ânodo em VCC = 3,3 V</td><td>o brilho basal parasita <strong>desaparece</strong></td></tr>
+            <tr><td>Pull-ups I²C</td><td>4,7 kΩ</td><td><strong>10 kΩ</strong></td><td>risco de tempo de subida a 400 kHz</td></tr>
+            <tr><td>Capacitância de bulk</td><td>maior capacitor = 220 nF</td><td>~20 µF na saída do conversor</td><td>melhor, ainda abaixo do ideal</td></tr>
+            <tr><td>Pontos de medição</td><td>—</td><td><strong>jumpers 0 Ω</strong> <code>R27</code>/<code>R28</code>/<code>R32</code> e test points MP4/MP5/MP7</td><td>permite separar consumo por subsistema</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3>Os três efeitos que decidem o refazer</h3>
+
+      <h4>(a) O teto de saturação caiu 20 %</h4>
+      <p>O MCP609 não é rail-to-rail; sobra cerca de 0,1 V para cada trilho.</p>
+      <div class="tw">
+        <table>
+          <thead><tr><th></th><th class="n">Artigo</th><th class="n">Versão final</th></tr></thead>
+          <tbody>
+            <tr><td>Excursão útil no último estágio</td><td class="n">±1,95 V<br><small>assimétrica</small></td><td class="n">±1,55 V<br><small>simétrica</small></td></tr>
+            <tr><td>Entrada máx. antes de ceifar · ganho 914×</td><td class="n">2,13 mV</td><td class="n">1,70 mV</td></tr>
+            <tr><td>Entrada máx. antes de ceifar · ganho 166×</td><td class="n">11,7 mV</td><td class="n">9,3 mV</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p>sEMG vai de 0,01 a 6 mV pp (RMS &lt; 1,5 mV, pelo próprio artigo). Ou seja: <strong>o ajuste de ganho usado nos ensaios antigos provavelmente ceifa agora</strong> — o DS3502 tem de ser re-trimado antes de qualquer coisa. Em compensação, o ceifamento passou a ser <strong>simétrico</strong>, que é mais honesto: o README já havia registrado que a 3,3 V a referência de 2,048 V ceifava o pico positivo em ~16 %, e a placa nova corrige exatamente isso.</p>
+
+      <h4>(b) A resolução referida à entrada melhorou 34 %</h4>
+      <div class="tw">
+        <table>
+          <thead><tr><th></th><th class="n">Artigo (5,0 V)</th><th class="n">Versão final (3,3 V)</th></tr></thead>
+          <tbody>
+            <tr><td>LSB no ADC</td><td class="n">152,6 µV</td><td class="n">100,7 µV</td></tr>
+            <tr><td>LSB referido ao eletrodo · ganho 914×</td><td class="n">167 nV</td><td class="n">110 nV</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p class="tnote">Efeito de segunda ordem — a SNR de 9,0 dB é limitada por ruído analógico, não por quantização — mas é a favor.</p>
+
+      <h4>(c) O risco novo: a referência do ADC é a saída de um conversor comutado</h4>
+      <p>Antes, o ponto médio analógico vinha de um MAX6106 de precisão. Agora vem de um divisor resistivo pendurado no trilho de 3,3 V do TPS63031 — <strong>o mesmo trilho que é a referência do ADC</strong>. Duas coisas se seguem:</p>
+      <ul>
+        <li><strong>A favor:</strong> o arranjo é <strong>ratiométrico</strong>. Se VCC deriva devagar, o ponto médio e o fundo de escala derivam juntos e o erro se cancela — melhor estabilidade térmica e de longo prazo do que com o MAX6106.</li>
+        <li><strong>Contra:</strong> o <code>PS_SYNC</code> do TPS63031 está <strong>aterrado</strong> (pino 7 → GND), habilitando o modo <em>power-save</em>. Com carga leve (~2,5 mA) o conversor entra em PFM: rajadas de frequência baixa e <strong>variável</strong>. O ADC amostra a 1 kS/s de forma assíncrona a essas rajadas, o que pode dobrar tons de comutação para dentro de 30–400 Hz por aliasing. O cancelamento ratiométrico não protege contra isso, porque o passa-alta desacopla o caminho de DC do sinal e o da referência de formas diferentes.</li>
+      </ul>
+      <div class="call">
+        <span class="lab">Este é o item que não se resolve por análise</span>
+        <p>É a razão técnica mais forte para refazer os ensaios de qualidade de sinal. <strong>Mitigação, se der problema:</strong> amarrar <code>PS_SYNC</code> em nível alto força PWM fixo a 2,4 MHz, bem acima da banda, ao custo de algumas dezenas de µA de quiescente. Vale a troca — medir os dois casos.</p>
+      </div>
+    </section>
+
+    <!-- 4 -->
+    <section id="bringup">
+      <h2 class="sec"><i>4</i>Riscos de bring-up</h2>
+      <p class="dek">Achados de revisão do esquemático, não problemas confirmados. Checar antes de qualquer ensaio.</p>
+
+      <h3><em>4.1</em>O <code>PWR_OFF</code> funciona por acidente — e derruba a placa em qualquer reset</h3>
+      <p>A trava: <code>R29</code> (10 kΩ) mantém o gate do P-FET <code>Q1</code> em V<sub>CAP</sub>, desligado. O botão <code>SW1</code> <em>ou</em> o NMOS <code>Q2</code> puxam o pé de <code>R30</code> para GND, colocando o gate em V<sub>CAP</sub>/2 e ligando <code>Q1</code>. O gate de <code>Q2</code> é a net <code>PWR_OFF</code>, com <code>R31</code> (10 kΩ) para GND. Apesar do nome, <strong><code>PWR_OFF</code> em nível alto = manter ligado</strong>: é uma trava de <em>keep-alive</em>.</p>
+      <p><code>PWR_OFF</code> é o pino D6 do módulo, ou seja <strong>P1.11</strong>. E o firmware atual já escreve 1 em P1.11 no boot — mas por outro motivo: era o TX da UART, forçado alto para matar o brilho parasita do LED2. Funciona, mas por coincidência.</p>
+      <ol>
+        <li><strong>Janela de boot.</strong> Entre soltar o botão e o <code>main()</code> chegar àquela linha, a trava depende só do botão. É preciso segurar o botão até o boot terminar — ou medir esse tempo e documentá-lo.</li>
+        <li><strong>Qualquer reset desliga a placa.</strong> No reset os GPIOs vão para alta impedância, <code>R31</code> puxa <code>PWR_OFF</code> para baixo, <code>Q2</code> abre, <code>R29</code> desliga <code>Q1</code> — e a alimentação do módulo cai antes de o reset completar. <strong>Watchdog, brownout ou reset por software viram desligamento definitivo</strong>, até alguém apertar o botão.</li>
+      </ol>
+      <div class="call">
+        <span class="lab">Correção sugerida</span>
+        <p>Um capacitor em paralelo com <code>R31</code> para sustentar a trava durante o reset — 100 kΩ + 1 µF dá ~100 ms de retenção.</p>
+      </div>
+
+      <h3><em>4.2</em>O módulo pode estar sendo alimentado pelo pino errado</h3>
+      <p><code>R32</code> (0 Ω) liga VCC = 3,3 V ao <strong>pino 14 (<code>5V</code>)</strong> do módulo XIAO nRF52840 — o pino de VBUS, que no módulo alimenta o regulador interno. Alimentar 3,3 V ali deixa o MCU em ~3,0–3,25 V (queda do LDO, ou de um diodo de bloqueio), enquanto os pull-ups de I²C estão em 3,3 V — VDD + 0,3 V, no limite do absoluto máximo dos pinos.</p>
+      <p>O esquemático também traz <code>R37</code> (0 Ω) no <strong>pino 12 (<code>3V3</code>)</strong>. Pela extração da netlist não foi possível resolver com certeza onde a outra ponta de <code>R37</code> vai. Alimentar direto no pino <code>3V3</code> é o caminho correto num sistema de 3,3 V, e evita perder ~10 % da energia do supercapacitor num LDO redundante. <a href="#perguntas">Pergunta 2 para o Robert.</a></p>
+
+      <h3><em>4.3</em>Pull-ups de 10 kΩ podem não fechar 400 kHz</h3>
+      <p>Fast mode exige tempo de subida &lt; 300 ns. Com <code>t_r ≈ 0,85·R·C</code>, 10 kΩ tolera no máximo <strong>~35 pF</strong> de capacitância de barramento; com 4,7 kΩ eram 75 pF. Numa placa pequena com dois escravos é plausível, mas apertado. <strong>Se o I²C falhar:</strong> baixar para 100 kHz — o README registra que a 100 kHz se perdiam 11 % das conversões — ou popular 4,7 kΩ.</p>
+
+      <h3><em>4.4</em>A tensão de corte real é definida pela chave, não pelo conversor</h3>
+      <p>O TPS63031 opera de 1,8 V a 5,5 V de entrada. Mas o gate de <code>Q1</code> fica em V<sub>CAP</sub>/2, logo <strong>V<sub>gs</sub> = −V<sub>CAP</sub>/2</strong>. Com V<sub>CAP</sub> em 2,0 V, V<sub>gs</sub> = −1,0 V — em cima do limiar do DMP2035U. Conforme o supercapacitor descarrega, o P-FET sai de condução e a R<sub>DS(on)</sub> sobe. A carga é pequena (poucos mA), o que perdoa bastante, mas o corte real deve cair em <strong>V<sub>CAP</sub> ≈ 2,0–2,5 V, não 1,8 V</strong> — custando 10 a 25 % da energia útil.</p>
+      <div class="call">
+        <span class="lab">Correção sugerida</span>
+        <p><code>R30</code> não é necessária para proteção: o DMP2035U aguenta V<sub>gs</sub> de ±20 V, e <code>R29</code> já limita a corrente de gate. Trocar <code>R30</code> por 0 Ω leva o gate direto a GND, dando V<sub>gs</sub> = −V<sub>CAP</sub> em toda a faixa. Mas <strong>medir antes de mexer</strong> — é exatamente o que o Ensaio 4 apura.</p>
+      </div>
+
+      <h3><em>4.5</em>Falta capacitor de bulk</h3>
+      <p>O README já mediu: os picos de corrente são <strong>um por conversão do ADC</strong> (~1000/s), 20 µs de largura, movendo ~0,4 µC cada, com p99,9 de 18,7 mA. Os ~20 µF na saída do TPS63031 seguram isso em ~20 mV de excursão; com 100 µF ficaria em ~5 mV. Importa mais agora do que antes, porque <strong>esse trilho é a referência do ADC</strong>.</p>
+    </section>
+
+    <!-- 5 -->
+    <section id="autonomia">
+      <h2 class="sec"><i>5</i>Autonomia do supercapacitor</h2>
+      <p class="dek">O número que define o artigo 2. Vale fazer a conta antes da bancada, para saber se o resultado medido faz sentido.</p>
+
+      <div class="call grave">
+        <span class="lab">Correção no protocolo</span>
+        <p>O protocolo traz <code>E = C·V²</code> e <code>E_disp = C·(V²max − V²min)</code>. <strong>Falta o fator ½ nas duas.</strong> Não é preciosismo: o erro <strong>dobra</strong> a energia disponível e, com ela, a autonomia declarada. Vale corrigir antes que vire número publicado.</p>
+      </div>
+
+<pre>E      = ½ · C · V²
+E_disp = ½ · C · (V²max − V²min)</pre>
+
+      <p>Com C = 1 F e V<sub>max</sub> = 5,0 V — o divisor <code>BQ_FB</code> (<code>R21</code>/<code>R24</code> = 634 k/200 k) dá 1,2 V × (1 + 3,17) ≈ 5,0 V, coerente com a tensão nominal do <code>KVR-5R0C105-R</code>:</p>
+
+      <div class="tw">
+        <table>
+          <thead><tr><th>Cenário de corte</th><th class="n">E<sub>disp</sub></th><th class="n">Após o TPS63031 (η ≈ 0,85)</th></tr></thead>
+          <tbody>
+            <tr><td>V<sub>off</sub> = 1,8 V — limite do conversor</td><td class="n">10,88 J</td><td class="n">9,25 J</td></tr>
+            <tr><td>V<sub>off</sub> = 2,5 V — limite provável da chave (<a href="#bringup">§4.4</a>)</td><td class="n">9,38 J</td><td class="n">7,97 J</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="chart">
+        <p class="ct">Autonomia estimada por estado · cenário conservador de 7,97 J</p>
+        <div class="bars">
+          <div class="bar">
+            <div class="bl">Streaming contínuo<small>2,734 mA · 9,02 mW</small></div>
+            <div class="track"><div class="fill" style="width:42.0%"><span>14,7 min</span></div><div class="tick" style="left:48.9%"></div></div>
+          </div>
+          <div class="bar">
+            <div class="bl">Conectado + streaming<small>2,647 mA · 8,73 mW</small></div>
+            <div class="track"><div class="fill" style="width:43.4%"><span>15,2 min</span></div><div class="tick" style="left:50.5%"></div></div>
+          </div>
+          <div class="bar">
+            <div class="bl">Advertising<small>1,54 mA · 5,08 mW · ADC dormindo</small></div>
+            <div class="track"><div class="fill" style="width:74.6%"><span>26,1 min</span></div><div class="tick" style="left:86.6%"></div></div>
+          </div>
+          <div class="bar">
+            <div class="bl">Mistura 94/3/3<small>1,60 mA · 5,28 mW</small></div>
+            <div class="track"><div class="fill" style="width:72.0%"><span>25,2 min</span></div><div class="tick" style="left:83.4%"></div></div>
+          </div>
+        </div>
+        <div class="axis">
+          <div></div>
+          <div class="ax"><u style="left:0">0</u><u style="left:28.6%">10</u><u style="left:57.1%">20</u><u style="left:85.7%">30 min</u></div>
+        </div>
+        <p class="legend"><span><i class="a"></i>corte em 2,5 V (conservador)</span><span><i class="b"></i>corte em 1,8 V, com a chave corrigida</span></p>
+      </div>
+      <p class="tnote">Correntes já medidas com a PPK2 a 3,3 V e 1 kSPS. <strong>Ressalva:</strong> foram medidas com a PPK2 alimentando VCC <em>diretamente</em>, sem o TPS63031 no caminho. Na placa nova falta somar o quiescente do conversor e a perda de conversão — o η = 0,85 é uma tentativa de contabilizar isso, mas o número real sai do Ensaio 4.</p>
+
+      <h3>Tempo de carga, e o argumento do artigo</h3>
+      <p><code>t = C·ΔV / I_chg</code>. Para 1 F de 0 a 5 V: <strong>100 s</strong> a 50 mA, <strong>50 s</strong> a 100 mA, <strong>25 s</strong> a 200 mA. A corrente é fixada por <code>R25</code> = 10 kΩ no pino ISET do BQ25173 — confirmar a constante no datasheet, e medir direto no Ensaio 3.</p>
+      <p>Duas observações que o protocolo não cobre e que valem virar resultado:</p>
+      <ul>
+        <li><strong>O BQ25173 é linear.</strong> Carregar um capacitor de 0 a V<sub>in</sub> por um elemento série dissipa tanta energia quanto armazena: a eficiência de carga é intrinsecamente <strong>~50 %</strong>. Somando com o TPS63031, a ida e volta fica em torno de <strong>~32 %</strong> — 25 J da USB para ~8 J entregues à carga. É um número honesto e interessante de publicar, e é o preço de não ter bateria.</li>
+        <li><strong>Com V<sub>in</sub> = 5,0 V da USB e alvo de 5,0 V, o carregador termina em dropout.</strong> O capacitor provavelmente para em ~4,7–4,8 V. Custa ~9 % da energia e, por outro lado, <strong>prolonga a vida do supercapacitor</strong>, que envelhece rápido no limite da tensão nominal. Medir a tensão final de fato alcançada; não assumir 5,0 V.</li>
+      </ul>
+
+      <h3>O enquadramento para o artigo 2</h3>
+      <p>Para calibrar a expectativa: a bateria Li-Ion de 400 mAh @ 3,7 V do artigo armazena <strong>5328 J</strong>. O supercapacitor armazena <strong>12,5 J</strong> — 1/426. A autonomia cai de 238 h para ~25 min.</p>
+      <div class="call good">
+        <span class="lab">Consequência editorial</span>
+        <p>O argumento do artigo 2 <strong>não pode ser autonomia</strong>. Tem de ser: carga em menos de um minuto, ausência de química (sem envelhecimento por ciclo, sem risco térmico, sem descarte especial), centenas de milhares de ciclos — e <strong>isolamento galvânico durante a medição</strong>. Com a USB desconectada a placa flutua, o que resolve de graça o problema de laço de terra que o próprio protocolo pede para tratar com “módulos isolados”.</p>
+      </div>
+    </section>
+
+    <!-- 6 -->
+    <section id="protocolo">
+      <h2 class="sec"><i>6</i>O protocolo do Robert</h2>
+      <p class="dek">Como os oito ensaios dele se mapeiam no que já existe — e quatro coisas para acertar no documento.</p>
+
+      <div class="tw">
+        <table>
+          <thead><tr><th class="n">#</th><th>Ensaio do protocolo</th><th>Situação</th></tr></thead>
+          <tbody>
+            <tr><td class="n">1</td><td>Consumo alimentado por bateria</td><td><span class="chip soft">80 % feito</span> Bancada PPK2 completa em <code>power_profiling/</code>, 9 estados, relatório em PDF. Falta rodar na placa nova e separar por subsistema</td></tr>
+            <tr><td class="n">2</td><td>Circuito de simulação de sinal sEMG</td><td><span class="chip soft">Parcial</span> O rig existe (DAC do STM32 + condicionamento), mas <strong>nunca foi caracterizado como instrumento</strong> — sem erro de amplitude, offset, RMS, resposta em frequência, SNR ou distorção</td></tr>
+            <tr><td class="n">3</td><td>Sistema de alimentação por supercapacitor</td><td><span class="chip new">Novo integral</span></td></tr>
+            <tr><td class="n">4</td><td>Consumo alimentado por supercapacitor</td><td><span class="chip new">Novo integral</span></td></tr>
+            <tr><td class="n">5</td><td>Comparação com equipamento clínico</td><td><span class="chip redo">Refazer</span> É o braço A + B + C do artigo, agora sobre a placa nova e com base de tempo válida</td></tr>
+            <tr><td class="n">6</td><td>PCB integrada</td><td>Trabalho do Robert</td></tr>
+            <tr><td class="n">7</td><td>Case por manufatura aditiva</td><td>Trabalho do Robert</td></tr>
+            <tr><td class="n">8</td><td>Validação final do sistema integrado</td><td>Depois de 6 e 7</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3>Quatro coisas para acertar</h3>
+
+      <h4>1 · As fórmulas de energia estão sem o fator ½</h4>
+      <p>Dobram a autonomia. Ver <a href="#autonomia">§5</a>.</p>
+
+      <h4>2 · A arquitetura da §7.2 não é a da placa</h4>
+      <p>O diagrama de blocos mostra <code>Storage → PMU (BQ25570) → LDO → BLE/uC</code>, e o texto fala em “BQ25570 ou BQ25173”. A placa final usa <strong>BQ25173</strong> (carregador linear) e, sobretudo, <strong>TPS63031 buck-boost</strong>, não um LDO. A distinção não é cosmética: com um supercapacitor caindo de 5 V para 2 V, <strong>um LDO jamais sustentaria 3,3 V</strong> — a topologia buck-boost é o que torna o projeto viável. E o BQ25570 é um colhedor de energia com MPPT, função completamente diferente de um carregador linear. Atualizar o diagrama antes de virar figura de artigo.</p>
+
+      <h4>3 · O Ensaio 5 pede caracterização por subsistema — e agora dá</h4>
+      <p>O README registrava: <em>“o firmware nunca para a aquisição, então não existe um estado ‘só rádio’ ou ‘só ADC’”</em>. Isso melhorou por dois lados:</p>
+      <ul>
+        <li>O <strong>power-down do ADS112C04</strong> quando desconectado já foi implementado e validado em hardware. Dá o estado “só rádio” (ADVERTISING, 1,54 mA) contra “rádio + ADC” (CONNECTED, 2,49 mA) — e é assim que a aquisição foi atribuída em 0,95 mA, medida direta em vez de inferida.</li>
+        <li>A placa nova tem <strong>jumpers de 0 Ω</strong> que fecham o resto: remover <code>R32</code> e inserir o amperímetro isola o <strong>módulo MCU</strong>; remover <code>R28</code> mede <strong>MCU + AFE</strong>; a diferença é o <strong>front-end analógico</strong>. <code>R27</code> mede o total drenado do supercapacitor. Pela primeira vez a atribuição por subsistema fica direta.</li>
+      </ul>
+
+      <h4>4 · Falta o ensaio mais importante do hardware novo</h4>
+      <p>A interação alimentação → qualidade de sinal (<a href="#hardware">§3c</a>). Proposta de <strong>Ensaio 2b</strong>: espectro de ruído do trilho de 3,3 V e seu acoplamento na banda 30–400 Hz, com <code>PS_SYNC</code> aterrado (power-save) <em>versus</em> em nível alto (PWM forçado), e em três pontos da descarga do supercapacitor — 5,0 V, 3,5 V e 2,5 V. É a medição que decide se a placa nova preserva a SNR de 9,0 dB — e, se não preservar, ela já aponta a correção.</p>
+    </section>
+
+    <!-- 7 -->
+    <section id="materiais">
+      <h2 class="sec"><i>7</i>Materiais por ensaio</h2>
+
+      <h3>O que já existe</h3>
+      <div class="tw">
+        <table>
+          <thead><tr><th>Item</th><th>Onde</th></tr></thead>
+          <tbody>
+            <tr><td>Nordic Power Profiler Kit II (PCA63100)</td><td>em mãos</td></tr>
+            <tr><td>J-Link + SEGGER Embedded Studio</td><td>em mãos</td></tr>
+            <tr><td>Placa sEMG v2.0 — a do artigo</td><td>em mãos</td></tr>
+            <tr><td>Rig ESP32 + ADS112C04 externo</td><td><code>emg_clinical/</code></td></tr>
+            <tr><td>STM32 com DAC + circuito de condicionamento</td><td>em mãos</td></tr>
+            <tr><td>PC com BLE funcionando via <code>bleak</code></td><td>em mãos</td></tr>
+            <tr><td>Bancada de medição em Python — 9 estados, relatório em PDF</td><td><code>power_profiling/</code></td></tr>
+            <tr><td>Cliente BLE que decodifica os blocos de 60 amostras</td><td><code>ble_client.py</code></td></tr>
+            <tr><td>Leitor de contadores do firmware por J-Link</td><td><code>fw_counters.py</code></td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3>O que falta comprar ou pegar</h3>
+      <div class="tw">
+        <table>
+          <thead><tr><th>Item</th><th class="n">Ensaio</th><th>Observação</th></tr></thead>
+          <tbody>
+            <tr><td><strong>Placa nova do Robert, montada</strong></td><td class="n">todos</td><td>com o <code>KVR-5R0C105-R</code> populado</td></tr>
+            <tr><td>Supercapacitor de reserva (1–2 un.)</td><td class="n">3, 4</td><td>morrem se abusados na tensão nominal</td></tr>
+            <tr><td>Ferro ponta fina, pinça, fluxo, malha dessoldadora</td><td class="n">1, 4</td><td>para os jumpers 0 Ω <code>R27</code>/<code>R28</code>/<code>R32</code></td></tr>
+            <tr><td>Headers de 2 pinos ou fio esmaltado</td><td class="n">1, 4</td><td>para inserir a PPK2 nos jumpers</td></tr>
+            <tr><td>Resistores 0805 — 4,7 k, 0 Ω, kit de divisor</td><td class="n">2, 4</td><td>re-trim do atenuador e as correções da §4</td></tr>
+            <tr><td>Osciloscópio com memória longa</td><td class="n">2, 2b, 3, 5</td><td><strong>provavelmente do laboratório</strong></td></tr>
+            <tr><td>Ponta diferencial, ou 2 canais + math</td><td class="n">2b</td><td>ripple do 3V3 sem laço de terra</td></tr>
+            <tr><td>Fonte de bancada 5 V ou USB com medição</td><td class="n">3</td><td>a PPK2 em modo ampere também serve, até 1 A</td></tr>
+            <tr><td>Multímetro</td><td class="n">1, 3, 4</td><td></td></tr>
+            <tr><td>Sistema EMG clínico de referência</td><td class="n">5</td><td><strong>laboratório</strong></td></tr>
+            <tr><td>Cabos blindados, jacarés, protoboard</td><td class="n">2, 5</td><td></td></tr>
+            <tr><td>Isolador USB tipo ADuM3160</td><td class="n">5</td><td>se aparecer laço de terra na sessão simultânea</td></tr>
+            <tr><td>Eletrodos Ag/AgCl + gel</td><td class="n">—</td><td><strong>só se houver braço com voluntário</strong> — o protocolo do artigo usa reprodução por DAC, então não há comitê de ética envolvido</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3>Trabalho de firmware necessário</h3>
+      <p>Não é opcional: alguns ensaios não são executáveis sem isso.</p>
+      <div class="tw">
+        <table>
+          <thead><tr><th class="n">#</th><th>O quê</th><th>Habilita</th><th>Prioridade</th></tr></thead>
+          <tbody>
+            <tr><td class="n">1</td><td>Tornar o keep-alive de P1.11 <strong>explícito</strong> — hoje é herança do workaround da UART — e o capacitor em <code>R31</code></td><td>operar a placa sem que ela se desligue em resets</td><td><span class="chip redo">Bloqueante</span></td></tr>
+            <tr><td class="n">2</td><td>Ler <code>VCAP</code> (P0.03) pelo SAADC e expor por BLE</td><td>Ensaios 3 e 4 <strong>sem instrumento externo</strong> — e é feature de produto</td><td><span class="chip soft">Alta</span></td></tr>
+            <tr><td class="n">3</td><td>Corrigir o no-op da escrita de ganho (<code>gain_level = new_gain</code>)</td><td>varredura de ganho nos Ensaios 2 e 5</td><td><span class="chip soft">Alta</span></td></tr>
+            <tr><td class="n">4</td><td>Número de sequência no pacote</td><td>a “perda de dados” que o protocolo pede</td><td>Média</td></tr>
+            <tr><td class="n">5</td><td>Marcadores de estado em GPIO para a porta lógica da PPK2 — pads livres P0.02, P1.14, P1.15</td><td>fronteiras de banda com precisão de µs no mesmo stream</td><td>Média</td></tr>
+            <tr><td class="n">6</td><td>Habilitar o LED verde (P1.12, hoje forçado alto)</td><td>indicação de estado; o brilho parasita já não existe a 3,3 V</td><td>Baixa</td></tr>
+            <tr><td class="n">7</td><td>Reavaliar o DC/DC interno do nRF (<code>DCDCEN</code>)</td><td>~10 % de consumo, e agora a energia é escassa</td><td>Baixa — confirmar antes se o módulo tem o indutor no pino DCC</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h4>E o mais importante para o Ensaio 5</h4>
+      <p>Substituir a coleta ASCII por serial do braço do clínico (<a href="#problemas">§2.1</a>). Três opções, em ordem de preferência:</p>
+      <ol>
+        <li><strong>Osciloscópio com memória longa</strong> digitalizando a saída analógica do clínico com F<sub>s</sub> conhecida e registrada. A opção mais defensável — nenhuma dúvida sobre base de tempo.</li>
+        <li><strong>Saída digital do próprio clínico</strong>, se ele tiver. Elimina o problema.</li>
+        <li><strong>Reescrever o rig do ESP32</strong> para amostragem governada pela interrupção de DRDY# e transporte binário com contador de sequência — a mesma arquitetura que consertou o firmware do nRF. Mais trabalho, e ainda seria o elo mais fraco.</li>
+      </ol>
+    </section>
+
+    <!-- 8 -->
+    <section id="ordem">
+      <h2 class="sec"><i>8</i>Ordem de execução</h2>
+      <p class="dek">Ordenada para que cada fase reduza o risco da seguinte, deixando a única fase que depende do laboratório para o fim — quando a placa já estiver estável.</p>
+
+      <div class="tw">
+        <table>
+          <thead><tr><th class="n">Fase</th><th>O quê</th><th>Onde</th><th>Duração</th><th>Depende de</th></tr></thead>
+          <tbody>
+            <tr><td class="n">0</td><td>Bring-up: checklist da §4, gravar firmware, confirmar I²C a 400 kHz, medir a janela de boot da trava</td><td>mesa</td><td>1 dia</td><td>placa do Robert</td></tr>
+            <tr><td class="n">1</td><td>Ensaio 1 refeito: PPK2 na placa nova a 3,3 V, 9 estados, <strong>e a separação por subsistema pelos jumpers</strong> <code>R28</code>/<code>R32</code></td><td>mesa</td><td>1–2 dias</td><td>fase 0</td></tr>
+            <tr><td class="n">2</td><td>Ensaio 3: carga do supercapacitor — I<sub>chg</sub> real, tempo de carga, tensão final alcançada, dissipação do BQ25173</td><td>mesa</td><td>1 dia</td><td>fase 0 + firmware #2</td></tr>
+            <tr><td class="n">3</td><td>Ensaio 4: descarga e autonomia — curva V<sub>CAP</sub>(t) por estado, <strong>tensão de corte real</strong>, autonomia medida contra a estimada da §5</td><td>mesa</td><td>1 dia</td><td>fase 2</td></tr>
+            <tr><td class="n">4</td><td><strong>Ensaio 2b (novo)</strong>: ruído do trilho e acoplamento na banda, <code>PS_SYNC</code> aterrado vs. alto, em 3 pontos da descarga</td><td>mesa</td><td>1 dia</td><td>fase 1, osciloscópio</td></tr>
+            <tr><td class="n">5</td><td>Ensaio 2: caracterizar o simulador como instrumento, <strong>resposta em frequência do sensor</strong> — não precisa do clínico, gerador de sinal basta — e re-trim do DS3502 para o novo teto</td><td>mesa</td><td>2 dias</td><td>fase 4, firmware #3</td></tr>
+            <tr><td class="n">6</td><td><strong>Ensaio 5: sessão no laboratório</strong> — reprodução do dataset gravada simultaneamente pelo clínico e pela placa nova, com base de tempo registrada nos dois braços</td><td><strong>laboratório</strong></td><td>1 sessão<br>(meio dia)</td><td>fases 0–5</td></tr>
+            <tr><td class="n">7</td><td>Recomputar A × B × C: SNR, envelope, resposta em frequência — com o eixo de tempo correto</td><td>mesa</td><td>1–2 dias</td><td>fase 6</td></tr>
+            <tr><td class="n">8</td><td>Ensaios 6, 7 e 8 — PCB integrada, case, validação final</td><td>Robert</td><td>—</td><td>—</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="call good">
+        <span class="lab">Só a fase 6 precisa do laboratório</span>
+        <p>Tudo o mais é bancada de mesa — inclusive a resposta em frequência do sensor, que no artigo saiu junto da comparação clínica mas na verdade só precisa de um gerador de sinal.</p>
+      </div>
+
+      <div class="call">
+        <span class="lab">Uma economia possível</span>
+        <p>Se o Robert tiver guardadas as <strong>gravações brutas da sessão de <em>sidekicking</em></strong> — as que geraram as Fig. 5 e 6 — <strong>com a taxa de amostragem registrada</strong>, dá para fazer um pré-teste sem ir ao laboratório: reproduzir o mesmo trecho pelo mesmo DAC para dentro da placa nova, na mesa, e comparar contra a gravação antiga do clínico. Não é simultâneo, e isso tem de ficar declarado — mas derrisca a sessão de laboratório inteira por algumas horas de bancada.</p>
+        <p><strong>Vale perguntar a ele antes de agendar o laboratório.</strong></p>
+      </div>
+    </section>
+
+    <!-- 9 -->
+    <section id="perguntas">
+      <h2 class="sec"><i>9</i>Perguntas para o Robert</h2>
+      <ol class="qs">
+        <li><b>01</b><div>Existem as <strong>gravações brutas do <em>sidekicking</em></strong> — os três braços das Fig. 5 e 6? E foi registrada a <strong>taxa de amostragem real</strong> de cada braço?</div></li>
+        <li><b>02</b><div><code>R32</code> (VCC → pino <code>5V</code>) e <code>R37</code> (pino <code>3V3</code>) são <strong>opções mutuamente exclusivas</strong> de alimentação do módulo?</div></li>
+        <li><b>03</b><div>O comportamento de <strong>desligar em qualquer reset</strong> é intencional?</div></li>
+        <li><b>04</b><div>O <code>KVR-5R0C105-R</code> é mesmo <strong>1 F / 5,0 V</strong>? E o <code>R25</code> = 10 kΩ do ISET corresponde a que corrente de carga no BQ25173?</div></li>
+        <li><b>05</b><div>O diagrama da §7.2 do protocolo — BQ25570 + LDO — vai ser atualizado para o que a placa realmente é (BQ25173 + TPS63031)?</div></li>
+        <li><b>06</b><div>O <code>PS_SYNC</code> aterrado foi escolha deliberada, ou default?</div></li>
+        <li><b>07</b><div>O equipamento clínico do laboratório tem <strong>saída digital</strong>, ou o único acesso é a saída analógica?</div></li>
+      </ol>
+    </section>
+
+    <footer>
+      <p><b>Documento fonte no repositório —</b> <code>ENSAIOS_ARTIGO_2.md</code><br>
+      <b>Leituras internas —</b> <code>README.md</code> · <code>power_profiling/PLANO.md</code> · <code>power_profiling/PENDENTE_ENSAIO_2.md</code> · <code>power_profiling/relatorio_consumo.pdf</code><br>
+      <b>Skills de bancada —</b> <code>ppk2-power-profiling</code> · <code>build-flash-nrf52</code></p>
+    </footer>
+
+  </main>
+</div>
+</body>
+</html>

@@ -1,0 +1,699 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Três Ensaios de Qualidade de Sinal</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Serif:ital,wght@0,400;0,500;0,600;1,400&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+<style>
+  :root{
+    --paper:#fbfcfd;--surface:#f0f4f8;--surface-2:#e6ecf3;
+    --ink:#151c26;--ink-2:#3d4a5c;--ink-3:#6b7889;
+    --rule:#d3dce6;--rule-strong:#aebccc;
+    --navy:#1c3f6e;--navy-soft:#e8eff7;
+    --amber:#a85a12;--amber-soft:#fbeedd;
+    --red:#9c2429;--red-soft:#fbe8e8;
+    --green:#2b6349;--green-soft:#e4f0ea;
+    --sans:"IBM Plex Sans","Segoe UI",system-ui,sans-serif;
+    --serif:"IBM Plex Serif",Georgia,"Times New Roman",serif;
+    --mono:"IBM Plex Mono","Cascadia Mono",Consolas,monospace;
+    color-scheme:light;
+  }
+  @media (prefers-color-scheme:dark){
+    :root:not([data-theme="light"]){
+      --paper:#0e131a;--surface:#161d27;--surface-2:#1e2733;
+      --ink:#e6ecf3;--ink-2:#b3c0d0;--ink-3:#8391a3;
+      --rule:#2a3441;--rule-strong:#3f4c5c;
+      --navy:#8ab4e8;--navy-soft:#17253a;
+      --amber:#e0a05a;--amber-soft:#2c2016;
+      --red:#e88a8d;--red-soft:#2e1719;
+      --green:#7fc3a3;--green-soft:#152a21;
+      color-scheme:dark;
+    }
+  }
+  :root[data-theme="dark"]{
+    --paper:#0e131a;--surface:#161d27;--surface-2:#1e2733;
+    --ink:#e6ecf3;--ink-2:#b3c0d0;--ink-3:#8391a3;
+    --rule:#2a3441;--rule-strong:#3f4c5c;
+    --navy:#8ab4e8;--navy-soft:#17253a;
+    --amber:#e0a05a;--amber-soft:#2c2016;
+    --red:#e88a8d;--red-soft:#2e1719;
+    --green:#7fc3a3;--green-soft:#152a21;
+    color-scheme:dark;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--paper);color:var(--ink);font-family:var(--serif);font-size:16.5px;line-height:1.62;-webkit-font-smoothing:antialiased}
+  .wrap{max-width:900px;margin:0 auto;padding:0 28px 96px}
+
+  .masthead{border-bottom:2px solid var(--ink);padding:44px 0 26px;margin-bottom:38px}
+  .eyebrow{font-family:var(--mono);font-size:11.5px;font-weight:500;letter-spacing:.13em;text-transform:uppercase;color:var(--amber);margin:0 0 16px;display:flex;flex-wrap:wrap;gap:6px 14px}
+  .eyebrow span:not(:last-child)::after{content:" ·";color:var(--ink-3);margin-left:14px}
+  h1{font-family:var(--sans);font-weight:700;font-size:clamp(30px,5.2vw,48px);line-height:1.04;letter-spacing:-.024em;margin:0 0 18px;text-wrap:balance;max-width:22ch}
+  .standfirst{font-size:19px;line-height:1.52;color:var(--ink-2);max-width:60ch;margin:0}
+  .standfirst b{color:var(--ink);font-weight:600}
+
+  section{margin:0 0 54px}
+  h2.sec{font-family:var(--sans);font-size:clamp(21px,3vw,28px);font-weight:600;letter-spacing:-.018em;line-height:1.14;margin:0 0 8px;text-wrap:balance;display:grid;grid-template-columns:auto 1fr;gap:14px;align-items:baseline}
+  h2.sec i{font-style:normal;font-family:var(--mono);font-size:.5em;font-weight:600;color:var(--amber);letter-spacing:0;white-space:nowrap}
+  .dek{color:var(--ink-3);font-size:15.5px;margin:0 0 22px;max-width:66ch;font-style:italic}
+  h3{font-family:var(--sans);font-size:17px;font-weight:600;letter-spacing:-.008em;margin:32px 0 10px;text-wrap:balance}
+  h4{font-family:var(--sans);font-size:14.5px;font-weight:600;margin:22px 0 8px;color:var(--ink-2)}
+  p{margin:0 0 14px;max-width:68ch}
+  ul,ol{margin:0 0 16px;padding-left:1.35em;max-width:66ch}
+  li{margin-bottom:7px}
+  li::marker{color:var(--ink-3)}
+  code,.m{font-family:var(--mono);font-size:.855em;background:var(--surface-2);padding:.1em .34em;border-radius:2px;color:var(--ink);white-space:nowrap}
+  strong{font-weight:600}
+
+  .tw{overflow-x:auto;margin:0 0 20px;border-top:2px solid var(--ink);border-bottom:1px solid var(--rule-strong)}
+  table{border-collapse:collapse;width:100%;font-family:var(--sans);font-size:14px;min-width:460px}
+  th{text-align:left;font-family:var(--mono);font-size:10.5px;font-weight:500;letter-spacing:.1em;text-transform:uppercase;color:var(--ink-3);padding:9px 14px 9px 0;border-bottom:1px solid var(--rule-strong);vertical-align:bottom}
+  td{padding:11px 14px 11px 0;border-bottom:1px solid var(--rule);vertical-align:top;color:var(--ink-2);line-height:1.44}
+  tr:last-child td{border-bottom:0}
+  td:first-child{color:var(--ink);font-weight:500}
+  td.n,th.n{text-align:right;font-variant-numeric:tabular-nums;font-family:var(--mono);font-size:13px;padding-right:0}
+  td.n:not(:last-child),th.n:not(:last-child){padding-right:18px}
+  td.n{color:var(--ink)}
+  table code{background:none;padding:0;font-size:.9em}
+  .tnote{font-size:13.5px;color:var(--ink-3);margin:-8px 0 20px;max-width:66ch;font-style:italic}
+  .tnote strong{font-style:normal}
+
+  .call{border-left:3px solid var(--amber);background:var(--amber-soft);padding:18px 22px;margin:0 0 24px;border-radius:0 3px 3px 0}
+  .call.grave{border-color:var(--red);background:var(--red-soft)}
+  .call.good{border-color:var(--green);background:var(--green-soft)}
+  .call.info{border-color:var(--navy);background:var(--navy-soft)}
+  .call p{margin:0 0 10px;max-width:64ch}
+  .call p:last-child{margin:0}
+  .call ul{margin:0;max-width:62ch}
+  .call .lab{display:block;font-family:var(--mono);font-size:10.5px;font-weight:600;letter-spacing:.11em;text-transform:uppercase;color:var(--amber);margin-bottom:7px}
+  .call.grave .lab{color:var(--red)}
+  .call.good .lab{color:var(--green)}
+  .call.info .lab{color:var(--navy)}
+
+  .steps{list-style:none;padding:0;margin:0 0 22px;border-top:2px solid var(--ink);counter-reset:st}
+  .steps>li{display:grid;grid-template-columns:2.3em 1fr;gap:0 14px;padding:14px 0;border-bottom:1px solid var(--rule);margin:0;counter-increment:st}
+  .steps>li::before{content:counter(st);font-family:var(--mono);font-size:13px;font-weight:600;color:var(--amber);text-align:right;padding-top:1px}
+  .steps>li>div{max-width:64ch}
+  .steps p{margin:0 0 8px;max-width:64ch}
+  .steps p:last-child{margin:0}
+  .steps .exp{display:block;font-family:var(--mono);font-size:12.5px;color:var(--ink-3);margin-top:6px;line-height:1.55}
+  .steps .exp b{color:var(--green);font-weight:600}
+  .steps .exp i{color:var(--red);font-style:normal;font-weight:600}
+
+  figure{margin:0 0 26px;border-top:2px solid var(--ink);padding-top:18px}
+  figure svg{display:block;width:100%;max-width:100%;height:auto;color:var(--ink);margin:0 auto 12px}
+  figcaption{font-family:var(--sans);font-size:13px;color:var(--ink-3);line-height:1.5;border-top:1px solid var(--rule);padding-top:10px}
+  figcaption b{color:var(--ink-2);font-weight:600;font-family:var(--mono);font-size:11px;letter-spacing:.08em;text-transform:uppercase;display:block;margin-bottom:4px}
+
+  pre{font-family:var(--mono);font-size:13px;background:var(--surface);border:1px solid var(--rule);border-left:3px solid var(--rule-strong);padding:14px 18px;margin:0 0 18px;overflow-x:auto;line-height:1.65;color:var(--ink);border-radius:0 3px 3px 0}
+
+  footer{border-top:2px solid var(--ink);padding-top:22px;font-family:var(--mono);font-size:12px;line-height:1.8;color:var(--ink-3)}
+  footer b{color:var(--ink-2);font-weight:500}
+  :focus-visible{outline:2px solid var(--amber);outline-offset:3px}
+
+  @page{size:A4;margin:17mm 16mm 16mm}
+  @media print{
+    :root{
+      --paper:#fff;--surface:#f2f5f8;--surface-2:#e8eef4;
+      --ink:#141b25;--ink-2:#3a4757;--ink-3:#66737f;
+      --rule:#ccd6e0;--rule-strong:#9dabbb;
+      --navy:#1c3f6e;--navy-soft:#e8eff7;
+      --amber:#95500f;--amber-soft:#fbeedd;
+      --red:#8d1f24;--red-soft:#fbe8e8;
+      --green:#24573f;--green-soft:#e4f0ea;
+      color-scheme:light;
+    }
+    *{-webkit-print-color-adjust:exact;print-color-adjust:exact}
+    body{background:#fff;font-size:9.9pt;line-height:1.5}
+    .wrap{max-width:none;padding:0}
+    .masthead{padding:0 0 14pt;margin-bottom:20pt}
+    h1{font-size:26pt;max-width:none}
+    .standfirst{font-size:11.5pt}
+    section{margin-bottom:20pt}
+    h2.sec{font-size:15.5pt;break-after:avoid;break-inside:avoid;margin-top:6pt}
+    .dek{font-size:10pt;margin-bottom:12pt}
+    h3{font-size:11.5pt;margin:15pt 0 6pt;break-after:avoid}
+    h4{font-size:10.5pt;margin:12pt 0 5pt;break-after:avoid}
+    p,ul,ol{max-width:none}
+    p{margin-bottom:8pt}
+    .tw{overflow:visible;margin-bottom:12pt}
+    table{min-width:0;font-size:8.6pt}
+    thead{display:table-header-group}
+    tr,.steps>li{break-inside:avoid}
+    th{font-size:7.4pt;padding:6pt 9pt 5pt 0}
+    td{padding:6pt 9pt 6pt 0}
+    td.n,th.n{font-size:8.4pt}
+    td.n:not(:last-child),th.n:not(:last-child){padding-right:14pt}
+    .tnote{font-size:8.6pt;margin:-4pt 0 12pt}
+    .call,pre,figure{break-inside:avoid;margin-bottom:14pt}
+    .call{padding:12pt 15pt}
+    pre{font-size:8.6pt;padding:10pt 14pt}
+    code,.m{white-space:normal;background:var(--surface-2)}
+    .steps{margin-bottom:14pt}
+    .steps>li{padding:9pt 0}
+    .steps>li>div,.steps p{max-width:none}
+    .steps .exp{font-size:8.4pt}
+    figure{padding-top:12pt}
+    figcaption{font-size:8.6pt;padding-top:7pt}
+    footer{padding-top:14pt;font-size:8pt;break-inside:avoid}
+  }
+</style>
+
+</head>
+<body>
+<div class="wrap">
+
+<header class="masthead">
+  <p class="eyebrow"><span>LEB · UFMG</span><span>Artigo 2</span><span>Setembro de 2026</span></p>
+  <h1>Três Ensaios de Qualidade de Sinal</h1>
+  <p class="standfirst">Só a comparação de sinal — dataset, clínico e nossa placa. <b>Sem voluntário, sem eletrodo de pele, sem comitê de ética:</b> o dataset é reproduzido por DAC e injetado nos terminais dos dois sistemas. Dois ensaios em casa, um no laboratório.</p>
+</header>
+
+<section id="confere">
+  <h2 class="sec"><i>0</i>Confirmação: são estes três</h2>
+
+  <div class="tw">
+    <table>
+      <thead><tr><th class="n">#</th><th>Ensaio</th><th>Onde</th><th>O que produz</th></tr></thead>
+      <tbody>
+        <tr><td class="n">1</td><td><strong>Calibrar a placa com o DAC</strong><br><span style="opacity:.7">só a nossa placa, sem clínico</span></td><td>casa</td><td>códigos por mV, banda real, ponto de ceifamento, piso de ruído</td></tr>
+        <tr><td class="n">2</td><td><strong>Injetar direto no ADC</strong><br><span style="opacity:.7">levantando o <code>R20</code>, sem front-end</span></td><td>casa</td><td>separa o que é do analógico e o que é do digitalizador</td></tr>
+        <tr><td class="n">3</td><td><strong>Os três braços, simultâneos</strong><br><span style="opacity:.7">dataset · clínico · nossa placa</span></td><td><strong>laboratório</strong></td><td>SNR dos três, morfologia no tempo, resposta em frequência dos dois sistemas</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <p>O ensaio 3 é o do artigo, refeito. Os ensaios 1 e 2 são em casa, não custam quase nada, e existem por um motivo só: <strong>sem eles, o ensaio 3 produz “um sinal parecido” em vez de uma medida em milivolts.</strong> O ensaio 2 em particular é meia hora de bancada e não precisa de circuito nenhum.</p>
+
+  <div class="call good">
+    <span class="lab">A restrição de ética não é uma limitação</span>
+    <p>Vale registrar isso no artigo em vez de pedir desculpa por ele: <strong>reproduzir o dataset por DAC é o teste melhor.</strong> Um sinal conhecido e repetível, com verdade absoluta conhecida, é o que se usa para caracterizar um <em>instrumento</em>. Sinal de pele é o que se usa para caracterizar um <em>músculo</em>.</p>
+    <p>A única coisa que se perde é a impedância real da interface eletrodo-pele — e isso se emula com um resistor de 10 kΩ em série em cada perna (<code>R4</code>/<code>R5</code> na Figura 2).</p>
+  </div>
+</section>
+
+<section id="topologia">
+  <h2 class="sec"><i>1</i>A topologia</h2>
+  <p class="dek">Um circuito de condicionamento, não dois. É isso que torna a comparação honesta.</p>
+
+  <figure>
+    <svg viewBox="0 0 760 290" role="img" aria-label="Topologia dos três braços: o DAC do STM32 passa por um circuito de condicionamento cuja saída se divide num nó estrela para as entradas diferenciais da nossa placa e para os terminais do EMG clínico; a nossa placa entrega por BLE ao notebook, o clínico entrega pela saída analógica ao osciloscópio, e o arquivo do dataset é o terceiro braço, sem hardware">
+      <defs>
+        <marker id="a1" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+          <path d="M0,1 L9,5 L0,9 z" fill="currentColor"/>
+        </marker>
+      </defs>
+
+      <!-- braço 1: arquivo -->
+      <rect x="14" y="16" width="212" height="40" fill="none" stroke="#2b6349" stroke-width="1.6" stroke-dasharray="5 3"/>
+      <text x="120" y="33" font-family="monospace" font-size="10.5" text-anchor="middle" fill="#2b6349" font-weight="600">BRAÇO 1 — o arquivo do dataset</text>
+      <text x="120" y="48" font-family="sans-serif" font-size="11" text-anchor="middle" fill="currentColor" opacity=".7">nenhum hardware · é a referência</text>
+      <path d="M226,36 L660,36 L660,118" fill="none" stroke="#2b6349" stroke-width="1.6" stroke-dasharray="5 3" marker-end="url(#a1)"/>
+
+      <!-- STM32 -->
+      <rect x="14" y="110" width="104" height="54" fill="none" stroke="currentColor" stroke-width="1.6"/>
+      <text x="66" y="132" font-family="sans-serif" font-size="12" text-anchor="middle" fill="currentColor">STM32 · DAC</text>
+      <text x="66" y="148" font-family="monospace" font-size="10" text-anchor="middle" fill="currentColor" opacity=".65">8 kS/s · 12 bits</text>
+      <line x1="118" y1="137" x2="150" y2="137" stroke="currentColor" stroke-width="1.6" marker-end="url(#a1)"/>
+
+      <!-- condicionamento -->
+      <rect x="152" y="110" width="116" height="54" fill="none" stroke="#a85a12" stroke-width="2"/>
+      <text x="210" y="132" font-family="sans-serif" font-size="12" text-anchor="middle" fill="#a85a12" font-weight="600">condicionamento</text>
+      <text x="210" y="148" font-family="monospace" font-size="10" text-anchor="middle" fill="currentColor" opacity=".7">Figura 2 · 5,6 mV pp</text>
+
+      <!-- nó estrela -->
+      <line x1="268" y1="137" x2="300" y2="137" stroke="currentColor" stroke-width="1.6"/>
+      <circle cx="300" cy="137" r="4.6" fill="#a85a12"/>
+      <text x="300" y="164" font-family="monospace" font-size="10.5" text-anchor="middle" fill="#a85a12" font-weight="600">nó estrela</text>
+      <text x="300" y="177" font-family="monospace" font-size="10" text-anchor="middle" fill="currentColor" opacity=".65">um sinal, dois destinos</text>
+
+      <!-- braço 2: nossa placa -->
+      <path d="M300,137 L300,92 L336,92" fill="none" stroke="#1c3f6e" stroke-width="1.8" marker-end="url(#a1)"/>
+      <rect x="338" y="66" width="130" height="52" fill="none" stroke="#1c3f6e" stroke-width="1.8"/>
+      <text x="403" y="86" font-family="sans-serif" font-size="12" text-anchor="middle" fill="#1c3f6e">nossa placa</text>
+      <text x="403" y="101" font-family="monospace" font-size="9.5" text-anchor="middle" fill="currentColor" opacity=".65">entradas diferenciais</text>
+      <text x="403" y="112" font-family="monospace" font-size="9.5" text-anchor="middle" fill="currentColor" opacity=".65">supercap · USB fora</text>
+      <line x1="468" y1="92" x2="502" y2="92" stroke="#1c3f6e" stroke-width="1.8" marker-end="url(#a1)"/>
+      <rect x="504" y="66" width="86" height="52" fill="none" stroke="#1c3f6e" stroke-width="1.8"/>
+      <text x="547" y="88" font-family="sans-serif" font-size="12" text-anchor="middle" fill="#1c3f6e">BLE</text>
+      <text x="547" y="104" font-family="monospace" font-size="9.5" text-anchor="middle" fill="currentColor" opacity=".65">1015 S/s</text>
+      <path d="M590,92 L626,92 L626,124 L656,124" fill="none" stroke="#1c3f6e" stroke-width="1.8" stroke-dasharray="5 3" marker-end="url(#a1)"/>
+      <text x="612" y="58" font-family="monospace" font-size="10.5" text-anchor="middle" fill="#1c3f6e" font-weight="600">BRAÇO 2</text>
+
+      <!-- braço 3: clínico -->
+      <path d="M300,137 L300,218 L336,218" fill="none" stroke="#a85a12" stroke-width="1.8" marker-end="url(#a1)"/>
+      <rect x="338" y="192" width="130" height="52" fill="none" stroke="#a85a12" stroke-width="1.8"/>
+      <text x="403" y="212" font-family="sans-serif" font-size="12" text-anchor="middle" fill="#a85a12">EMG clínico</text>
+      <text x="403" y="227" font-family="monospace" font-size="9.5" text-anchor="middle" fill="currentColor" opacity=".65">terminais de injeção</text>
+      <text x="403" y="238" font-family="monospace" font-size="9.5" text-anchor="middle" fill="currentColor" opacity=".65">→ saída analógica</text>
+      <line x1="468" y1="218" x2="502" y2="218" stroke="#a85a12" stroke-width="1.8" marker-end="url(#a1)"/>
+      <rect x="504" y="192" width="86" height="52" fill="none" stroke="#a85a12" stroke-width="1.8"/>
+      <text x="547" y="214" font-family="sans-serif" font-size="12" text-anchor="middle" fill="#a85a12">oscilosc.</text>
+      <text x="547" y="230" font-family="monospace" font-size="9.5" text-anchor="middle" fill="currentColor" opacity=".65">F&#8202;s anotada</text>
+      <path d="M590,218 L626,218 L626,150 L656,150" fill="none" stroke="#a85a12" stroke-width="1.8" stroke-dasharray="5 3" marker-end="url(#a1)"/>
+      <text x="612" y="184" font-family="monospace" font-size="10.5" text-anchor="middle" fill="#a85a12" font-weight="600">BRAÇO 3</text>
+
+      <!-- terra do osciloscópio -->
+      <line x1="547" y1="244" x2="547" y2="262" stroke="currentColor" stroke-width="1.6"/>
+      <line x1="533" y1="262" x2="561" y2="262" stroke="currentColor" stroke-width="2"/>
+      <line x1="538" y1="267" x2="556" y2="267" stroke="currentColor" stroke-width="2"/>
+      <line x1="543" y1="272" x2="551" y2="272" stroke="currentColor" stroke-width="2"/>
+      <text x="570" y="268" font-family="monospace" font-size="10.5" fill="currentColor" opacity=".8">único terra da bancada</text>
+
+      <!-- notebook -->
+      <rect x="658" y="110" width="90" height="54" fill="none" stroke="currentColor" stroke-width="1.6"/>
+      <text x="703" y="132" font-family="sans-serif" font-size="12" text-anchor="middle" fill="currentColor">análise</text>
+      <text x="703" y="148" font-family="monospace" font-size="10" text-anchor="middle" fill="currentColor" opacity=".65">notebook</text>
+    </svg>
+    <figcaption><b>Figura 1 — os três braços</b>
+      A saída do condicionamento se divide num <strong>nó estrela</strong> e alimenta os dois sistemas ao mesmo tempo. Nossa placa apresenta ~1,06 MΩ e um amplificador clínico apresenta centenas de MΩ, então os dois em paralelo carregam a fonte de 200 Ω em menos de 0,02 % — <strong>os dois recebem exatamente o mesmo sinal, por construção</strong>, e não por calibração. É esse detalhe que faz a comparação valer. O braço 1 não tem hardware: é o arquivo.
+    </figcaption>
+  </figure>
+
+  <div class="call info">
+    <span class="lab">Aterramento: um só terra, e é o osciloscópio</span>
+    <p>No laboratório o osciloscópio é ligado na rede, então ele <em>é</em> o terra da bancada. Isso está certo — o que não pode haver é um segundo. Logo: <strong>notebook na bateria</strong> (carregador fora da tomada) e <strong>USB de carga da placa desconectada</strong>. A placa roda do supercapacitor, que dá 15 a 25 min — mais que a sessão.</p>
+  </div>
+</section>
+
+<section id="circuito">
+  <h2 class="sec"><i>2</i>O circuito de condicionamento</h2>
+  <p class="dek">Um circuito, sete componentes no caminho do sinal — e quatro capacitores de acoplamento, não dois.</p>
+
+  <h3>O que ele tem de fazer</h3>
+  <p>A folha 1 do esquemático diz o que o circuito enfrenta nas nossas entradas: cada pad entra por <strong>56 kΩ</strong> em série, e cada entrada do INA317 é polarizada em <strong>REF = VCC/2 = 1,65 V através de 1 MΩ</strong>. Disso saem quatro exigências:</p>
+  <ol>
+    <li><strong>Acoplar em AC.</strong> Se você amarrar um terminal em DC ao terra, a entrada do INA cai para 1,65 V × 56 k/(56 k + 1 M) ≈ <strong>87 mV</strong> — fora da faixa de modo comum, e o amplificador morre. Com capacitor, a polarização de 1 MΩ da própria placa faz o trabalho.</li>
+    <li><strong>Atenuar ~500×</strong>, de ±1,40 V do DAC para ±2,8 mV nos terminais.</li>
+    <li><strong>Impedância de saída baixa</strong> (200 Ω), para a razão depender só dos resistores.</li>
+    <li><strong>Filtrar as imagens do DAC</strong>, para não dobrarem para dentro da banda.</li>
+  </ol>
+
+  <div class="call grave">
+    <span class="lab">A correção que a sua última mensagem revelou</span>
+    <p>Como o <strong>mesmo</strong> sinal vai para os dois sistemas, cada destino precisa do <strong>seu próprio par de capacitores</strong> — quatro no total, não dois. Se os dois sistemas ficarem do mesmo lado de um único capacitor, eles ficam acoplados em DC um ao outro, e as duas redes de polarização passam a brigar: a nossa puxa para 1,65 V por 1 MΩ, a do clínico puxa para o que ela quiser.</p>
+    <p>Com um par por destino, cada sistema polariza o seu próprio ponto de operação, e o sinal continua idêntico nos dois porque os capacitores estão em 0,15 Hz e os dois saem do mesmo nó de 200 Ω.</p>
+  </div>
+
+  <figure>
+    <svg viewBox="0 0 760 330" role="img" aria-label="Esquemático: DAC do STM32, filtro RC de 1 kilo-ohm e 100 nanofarad, buffer seguidor MCP6002, resistor de 100 kilo-ohms para um nó TAP, resistor de 200 ohms para o terra, e quatro capacitores de 1 microfarad levando o sinal quente e o frio para PAD1 e PAD2 da nossa placa e para CLIN mais e CLIN menos do clínico">
+      <defs>
+        <marker id="a2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+          <path d="M0,1 L9,5 L0,9 z" fill="currentColor"/>
+        </marker>
+      </defs>
+      <!-- blindagem -->
+      <rect x="8" y="26" width="620" height="270" fill="none" stroke="currentColor" stroke-width="1" stroke-dasharray="5 4" opacity=".45"/>
+      <text x="16" y="20" font-family="monospace" font-size="10.5" fill="currentColor" opacity=".65">caixa metálica, blindagem ligada ao GND</text>
+
+      <!-- DAC -->
+      <rect x="18" y="92" width="86" height="56" fill="none" stroke="currentColor" stroke-width="1.6"/>
+      <text x="61" y="114" font-family="sans-serif" font-size="12" text-anchor="middle" fill="currentColor">DAC</text>
+      <text x="61" y="130" font-family="monospace" font-size="10" text-anchor="middle" fill="currentColor" opacity=".65">STM32 PA4</text>
+      <text x="61" y="164" font-family="monospace" font-size="10.5" text-anchor="middle" fill="currentColor" opacity=".65">±1,400 V</text>
+
+      <!-- R1 -->
+      <line x1="104" y1="120" x2="132" y2="120" stroke="currentColor" stroke-width="1.6"/>
+      <rect x="132" y="110" width="44" height="20" fill="none" stroke="currentColor" stroke-width="1.6"/>
+      <text x="154" y="103" font-family="monospace" font-size="10.5" text-anchor="middle" fill="currentColor">R1 1k</text>
+      <line x1="176" y1="120" x2="208" y2="120" stroke="currentColor" stroke-width="1.6"/>
+
+      <!-- nó A + C1 -->
+      <circle cx="208" cy="120" r="3.4" fill="currentColor"/>
+      <line x1="208" y1="120" x2="208" y2="148" stroke="currentColor" stroke-width="1.6"/>
+      <line x1="194" y1="148" x2="222" y2="148" stroke="currentColor" stroke-width="1.8"/>
+      <line x1="194" y1="156" x2="222" y2="156" stroke="currentColor" stroke-width="1.8"/>
+      <line x1="208" y1="156" x2="208" y2="250" stroke="currentColor" stroke-width="1.6"/>
+      <text x="190" y="176" font-family="monospace" font-size="10.5" text-anchor="end" fill="currentColor">C1 100n</text>
+
+      <!-- entrada + -->
+      <line x1="208" y1="120" x2="208" y2="104" stroke="currentColor" stroke-width="1.6"/>
+      <line x1="208" y1="104" x2="238" y2="104" stroke="currentColor" stroke-width="1.6"/>
+
+      <!-- buffer -->
+      <polygon points="238,90 238,150 296,120" fill="none" stroke="currentColor" stroke-width="1.6"/>
+      <text x="248" y="108" font-family="sans-serif" font-size="13" fill="currentColor">+</text>
+      <text x="248" y="141" font-family="sans-serif" font-size="13" fill="currentColor">–</text>
+      <text x="266" y="80" font-family="monospace" font-size="10.5" text-anchor="middle" fill="currentColor">U1 LM358 · 5 V</text>
+      <line x1="296" y1="120" x2="314" y2="120" stroke="currentColor" stroke-width="1.6"/>
+      <line x1="314" y1="120" x2="314" y2="172" stroke="currentColor" stroke-width="1.6"/>
+      <line x1="314" y1="172" x2="226" y2="172" stroke="currentColor" stroke-width="1.6"/>
+      <line x1="226" y1="172" x2="226" y2="136" stroke="currentColor" stroke-width="1.6"/>
+      <line x1="226" y1="136" x2="238" y2="136" stroke="currentColor" stroke-width="1.6"/>
+
+      <!-- R2 -->
+      <circle cx="314" cy="120" r="3.4" fill="currentColor"/>
+      <line x1="314" y1="120" x2="344" y2="120" stroke="currentColor" stroke-width="1.6"/>
+      <rect x="344" y="110" width="52" height="20" fill="none" stroke="#a85a12" stroke-width="1.8"/>
+      <text x="370" y="103" font-family="monospace" font-size="10.5" text-anchor="middle" fill="#a85a12">R2 100k 0,1%</text>
+
+      <!-- TAP -->
+      <circle cx="412" cy="120" r="3.6" fill="currentColor"/>
+      <line x1="396" y1="120" x2="412" y2="120" stroke="currentColor" stroke-width="1.6"/>
+      <text x="424" y="140" font-family="monospace" font-size="10.5" text-anchor="start" fill="currentColor" opacity=".75">TAP</text>
+      <!-- R3 para o terra -->
+      <line x1="412" y1="120" x2="412" y2="160" stroke="currentColor" stroke-width="1.6"/>
+      <rect x="401" y="160" width="22" height="44" fill="none" stroke="#a85a12" stroke-width="1.8"/>
+      <text x="432" y="178" font-family="monospace" font-size="10" fill="#a85a12">R3 200R</text>
+      <text x="432" y="191" font-family="monospace" font-size="10" fill="#a85a12">0,1%</text>
+      <line x1="412" y1="204" x2="412" y2="250" stroke="currentColor" stroke-width="1.6"/>
+
+      <!-- barramento de terra -->
+      <line x1="208" y1="250" x2="452" y2="250" stroke="currentColor" stroke-width="1.6"/>
+      <circle cx="412" cy="250" r="3.4" fill="currentColor"/>
+      <circle cx="452" cy="250" r="3.4" fill="currentColor"/>
+      <line x1="280" y1="250" x2="280" y2="266" stroke="currentColor" stroke-width="1.6"/>
+      <line x1="266" y1="266" x2="294" y2="266" stroke="currentColor" stroke-width="1.8"/>
+      <line x1="271" y1="271" x2="289" y2="271" stroke="currentColor" stroke-width="1.8"/>
+      <line x1="276" y1="276" x2="284" y2="276" stroke="currentColor" stroke-width="1.8"/>
+
+      <!-- trilho quente -->
+      <line x1="412" y1="120" x2="480" y2="120" stroke="currentColor" stroke-width="1.6"/>
+      <line x1="480" y1="120" x2="480" y2="54" stroke="currentColor" stroke-width="1.6"/>
+      <circle cx="480" cy="54" r="3.4" fill="currentColor"/>
+      <circle cx="480" cy="92" r="3.4" fill="currentColor"/>
+
+      <!-- perna quente 1: PAD1 -->
+      <line x1="480" y1="54" x2="502" y2="54" stroke="currentColor" stroke-width="1.6"/>
+      <line x1="502" y1="42" x2="502" y2="66" stroke="#1c3f6e" stroke-width="1.8"/>
+      <line x1="510" y1="42" x2="510" y2="66" stroke="#1c3f6e" stroke-width="1.8"/>
+      <text x="506" y="34" font-family="monospace" font-size="10" text-anchor="middle" fill="#1c3f6e">C2 1µ</text>
+      <line x1="510" y1="54" x2="534" y2="54" stroke="currentColor" stroke-width="1.6"/>
+      <rect x="534" y="44" width="40" height="20" fill="none" stroke="#1c3f6e" stroke-width="1.4" stroke-dasharray="4 3"/>
+      <text x="554" y="36" font-family="monospace" font-size="9.5" text-anchor="middle" fill="#1c3f6e" opacity=".85">R4 10k</text>
+      <line x1="574" y1="54" x2="654" y2="54" stroke="#1c3f6e" stroke-width="1.6" marker-end="url(#a2)"/>
+      <text x="660" y="51" font-family="monospace" font-size="11.5" fill="#1c3f6e" font-weight="600">PAD1</text>
+      <text x="660" y="64" font-family="monospace" font-size="9" fill="currentColor" opacity=".6">nossa placa</text>
+
+      <!-- perna quente 2: CLIN+ -->
+      <line x1="480" y1="92" x2="502" y2="92" stroke="currentColor" stroke-width="1.6"/>
+      <line x1="502" y1="80" x2="502" y2="104" stroke="#a85a12" stroke-width="1.8"/>
+      <line x1="510" y1="80" x2="510" y2="104" stroke="#a85a12" stroke-width="1.8"/>
+      <text x="530" y="86" font-family="monospace" font-size="10" fill="#a85a12">C4 1µ</text>
+      <line x1="510" y1="92" x2="654" y2="92" stroke="#a85a12" stroke-width="1.6" marker-end="url(#a2)"/>
+      <text x="660" y="89" font-family="monospace" font-size="11.5" fill="#a85a12" font-weight="600">CLIN+</text>
+      <text x="660" y="102" font-family="monospace" font-size="9" fill="currentColor" opacity=".6">clínico</text>
+
+      <!-- trilho frio -->
+      <line x1="452" y1="250" x2="452" y2="162" stroke="currentColor" stroke-width="1.6"/>
+      <circle cx="452" cy="220" r="3.4" fill="currentColor"/>
+      <circle cx="452" cy="162" r="3.4" fill="currentColor"/>
+
+      <!-- perna fria 1: PAD2 -->
+      <line x1="452" y1="162" x2="502" y2="162" stroke="currentColor" stroke-width="1.6"/>
+      <line x1="502" y1="150" x2="502" y2="174" stroke="#1c3f6e" stroke-width="1.8"/>
+      <line x1="510" y1="150" x2="510" y2="174" stroke="#1c3f6e" stroke-width="1.8"/>
+      <text x="506" y="143" font-family="monospace" font-size="10" text-anchor="middle" fill="#1c3f6e">C3 1µ</text>
+      <line x1="510" y1="162" x2="534" y2="162" stroke="currentColor" stroke-width="1.6"/>
+      <rect x="534" y="152" width="40" height="20" fill="none" stroke="#1c3f6e" stroke-width="1.4" stroke-dasharray="4 3"/>
+      <text x="554" y="145" font-family="monospace" font-size="9.5" text-anchor="middle" fill="#1c3f6e" opacity=".85">R5 10k</text>
+      <line x1="574" y1="162" x2="654" y2="162" stroke="#1c3f6e" stroke-width="1.6" marker-end="url(#a2)"/>
+      <text x="660" y="159" font-family="monospace" font-size="11.5" fill="#1c3f6e" font-weight="600">PAD2</text>
+
+      <!-- perna fria 2: CLIN- -->
+      <line x1="452" y1="220" x2="502" y2="220" stroke="currentColor" stroke-width="1.6"/>
+      <line x1="502" y1="208" x2="502" y2="232" stroke="#a85a12" stroke-width="1.8"/>
+      <line x1="510" y1="208" x2="510" y2="232" stroke="#a85a12" stroke-width="1.8"/>
+      <text x="506" y="247" font-family="monospace" font-size="10" text-anchor="middle" fill="#a85a12">C5 1µ</text>
+      <line x1="510" y1="220" x2="654" y2="220" stroke="#a85a12" stroke-width="1.6" marker-end="url(#a2)"/>
+      <text x="660" y="217" font-family="monospace" font-size="11.5" fill="#a85a12" font-weight="600">CLIN–</text>
+
+      <!-- GND comum -->
+      <line x1="340" y1="250" x2="340" y2="306" stroke="currentColor" stroke-width="1.6"/>
+      <line x1="340" y1="306" x2="654" y2="306" stroke="currentColor" stroke-width="1.6" marker-end="url(#a2)"/>
+      <text x="660" y="303" font-family="monospace" font-size="11" fill="currentColor">GND comum</text>
+      <text x="660" y="316" font-family="monospace" font-size="9" fill="currentColor" opacity=".6">ref. dos dois</text>
+    </svg>
+    <figcaption><b>Figura 2 — o circuito, com os quatro acoplamentos</b>
+      <code>R1</code>/<code>C1</code> matam as imagens do DAC (f<sub>c</sub> = 1,59 kHz). <code>U1</code> como seguidor fixa a impedância de fonte, para que a atenuação dependa só de <code>R2</code>/<code>R3</code> — sem ele, os ~15 kΩ de saída do DAC entrariam na conta e variariam com a temperatura. <strong>O LM358 tem de ser alimentado com 5 V</strong>, não com 3,3 V. Do <code>TAP</code> saem <strong>dois</strong> acoplamentos para o lado quente (<code>C2</code> para a nossa placa, <code>C4</code> para o clínico) e do <code>GND</code> saem <strong>dois</strong> para o lado frio. <code>R4</code>/<code>R5</code>, tracejados, com jumper em paralelo: fechado dá 200 Ω de impedância de fonte, aberto emula 10 kΩ de eletrodo.
+    </figcaption>
+  </figure>
+
+  <h3>Por que não existe etapa de “deixar simétrico”</h3>
+  <p>A tentação natural é primeiro converter o 0–3,3 V do DAC num sinal simétrico em torno de zero, e só depois atenuar. <strong>Não faça</strong> — o capacitor de acoplamento já resolve isso, e de graça:</p>
+<pre>DAC 0–3,3 V ─→ buffer ─→ atenuar ─→ [1 µF] ─→ terminal
+(centrado em 1,65 V)                    ↑
+                     aqui o DC morre, e o sinal passa a oscilar
+                     em torno do que <b>o destino</b> quiser</pre>
+  <p>Nossa placa polariza a própria entrada em REF = 1,65 V por 1 MΩ; o clínico polariza a dele no que ele quiser. Construir a simetria antes é gastar um trilho negativo (ou um deslocador de nível, com o offset e a deriva que vêm com ele) para produzir uma referência que o capacitor desfaz duas etapas depois.</p>
+  <p>E, de todo modo, <strong>±1,65 V o DAC não entrega</strong>: com o buffer de saída ligado ele fica em ~0,2 V a 3,1 V, ou seja ±1,45 V de excursão. O padrão deste ensaio é <strong>±1,40 V</strong> (2,80 V pp), que fica folgado na região linear e usa 85 % dos códigos.</p>
+
+  <h3>A amplitude alvo: 5,6 mV <em>pico a pico</em></h3>
+  <p>Do próprio artigo: a amplitude de sEMG vai de 0,01 a 5 mV, com <strong>pico a pico abaixo de 6 mV</strong> e RMS abaixo de 1,5 mV. Como o <em>sidekicking</em> é movimento agressivo, o topo dessa faixa é o alvo certo — e é pico a pico, não de pico (5 mV de pico seriam 10 mV pp, fora do fisiológico).</p>
+
+<pre>TAP = entrada &times; R3/(R2+R3)
+    = 2,80 V &times; 200/(100 000 + 200)  =  <b>5,59 mV pp</b></pre>
+  <p><code>R2</code> = 100 kΩ e <code>R3</code> = 200 Ω, os dois de <strong>0,1 %</strong> e <strong>soldados fixos</strong>. A razão é 1:501, conhecida em 0,14 % por construção — sem ajuste, sem seletor, e sem medir milivolt em instrumento nenhum. A impedância de saída é o próprio <code>R3</code>: <strong>200 Ω</strong>.</p>
+  <p class="tnote"><strong>Não há seletor de faixa, e não há potenciômetro.</strong> A amplitude fina se controla escalando a tabela do DAC em software, que é mais preciso que trocar resistor: mesmo a 1 mV pp você ainda gasta 731 códigos, o que dá 59 dB de SNR na fonte — 50 dB acima do que se quer medir. Um potenciômetro, além de ter 10–20 % de tolerância, mudaria de valor se alguém encostasse nele entre a calibração em casa e a sessão no laboratório. Ruído Johnson de 200 Ω em 400 Hz: 36 nV; o piso é do INA317 (~1,2 µV), não do atenuador.</p>
+
+  <h3>Onde isso cai no nosso conversor</h3>
+  <p>Ganho fixo da placa: 34,33 × 1,556 × 1,556 = <strong>83,13</strong>. O estágio ajustável vai de 1× a 11× (G = 1 + R<sub>wiper</sub>/1 kΩ), e o firmware sai do boot em <strong>2×</strong> (<code>DEFAULT_RESITANCE = DS3502_RES_1K_OHM</code>). Janela sem ceifar: 3,10 V pp. LSB do ADC: 100,7 µV.</p>
+
+  <div class="tw">
+    <table>
+      <thead><tr><th class="n">Ganho ajustável</th><th class="n">Wiper</th><th class="n">Saída pp</th><th class="n">Códigos pp</th><th class="n">% da janela</th></tr></thead>
+      <tbody>
+        <tr><td class="n">2× (boot)</td><td class="n"><code>0x0D</code> · 1 kΩ</td><td class="n">930 mV</td><td class="n">9 230</td><td class="n">30 %</td></tr>
+        <tr><td class="n"><strong>4×</strong></td><td class="n"><strong><code>0x27</code> · 3 kΩ</strong></td><td class="n"><strong>1,86 V</strong></td><td class="n"><strong>18 460</strong></td><td class="n"><strong>60 %</strong></td></tr>
+        <tr><td class="n">6×</td><td class="n"><code>0x3F</code> · 5 kΩ</td><td class="n">2,79 V</td><td class="n">27 700</td><td class="n">90 % — no limite</td></tr>
+        <tr><td class="n">11×</td><td class="n"><code>0x7F</code> · 10 kΩ</td><td class="n">5,11 V</td><td class="n">—</td><td class="n">ceifa</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="call good">
+    <span class="lab">Ponto de operação: ganho ajustável 4×</span>
+    <p><strong>Faixa de 5,59 mV pp com o wiper em 3 kΩ</strong> — 60 % da janela, sem ceifar, com amplitude fisiologicamente realista. Note que com sinal realista o ganho 11× <strong>ceifa</strong>; ele só serviria para sinal fraco.</p>
+    <p>E a boa notícia: <strong>no ganho de boot você já tem 30 % da janela.</strong> Corrigir o <em>no-op</em> da escrita BLE de ganho (<code>on_write</code> valida e loga mas nunca atribui <code>gain_level</code>) deixa de ser bloqueante para o ensaio 1 — virou conveniência. Para o ponto de operação de 4×, basta recompilar com <code>DEFAULT_RESITANCE DS3502_RES_3K_OHM</code>.</p>
+  </div>
+
+  <h3>O amplificador operacional: LM358 serve, em 5 V</h3>
+  <p>O sinal a bufferizar vive entre 0,25 V e 3,05 V. O limite do LM358 é a faixa de modo comum e a excursão de saída, que param ambas em <strong>V+ &minus; 1,5 V</strong>:</p>
+  <div class="tw">
+    <table>
+      <thead><tr><th>Alimentação do U1</th><th class="n">Teto do LM358</th><th class="n">Precisamos de</th><th></th></tr></thead>
+      <tbody>
+        <tr><td>3,3 V</td><td class="n">1,80 V</td><td class="n">3,05 V</td><td><strong>não funciona</strong></td></tr>
+        <tr><td><strong>5,0 V</strong></td><td class="n">3,50 V</td><td class="n">3,05 V</td><td><strong>funciona</strong>, 0,45 V de margem</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p>Os defeitos conhecidos do LM358 não importam <em>aqui</em>, e vale registrar por quê:</p>
+  <ul>
+    <li><strong>Ruído</strong> (~40 nV/&radic;Hz, ou 800 nV RMS na saída): o atenuador divide o ruído do buffer junto com o sinal, então chega em 1,6 nV nos terminais — mil vezes abaixo do piso do INA317.</li>
+    <li><strong>Offset</strong> (até 7 mV): o capacitor de acoplamento remove DC.</li>
+    <li><strong>Slew rate</strong> (0,3 V/µs): o pior caso do sinal exige 5,5 mV/µs. Sobra 50&times;.</li>
+    <li><strong>Distorção de crossover</strong>, o vício clássico da peça: não aparece, porque a carga é resistiva para o terra e a saída <em>só fornece</em> corrente, nunca inverte o sentido.</li>
+  </ul>
+  <p>A margem de 0,45 V é suficiente, não folgada. Se no passo 2 do ensaio 1 o pico não alcançar ±1,40 V, baixe para <strong>±1,20 V</strong> (custa 1,4 dB de SNR na fonte, irrelevante) ou troque por um <code>MCP6002</code>.</p>
+
+  <h3>O ramo de injeção no <code>R20</code> — para o ensaio 2</h3>
+  <p>O ensaio 2 precisa de um sinal de <strong>volts</strong> na entrada do ADC, não dos 5,6 mV do <code>TAP</code>. E ao levantar o <code>R20</code> a entrada <code>AIN0</code> fica flutuando, sem nada definindo o DC dela. Três resistores resolvem os dois problemas de uma vez:</p>
+<pre>saída do buffer &#8212;&#8212;[R6 47k]&#8212;&#8212;&#9516;&#8212;&#8212; ADC IN (pad do R20 levantado)
+                             &#9474;
+                  [R7 100k]&#8212;&#8212;&#9532;&#8212;&#8212;[R8 100k]
+                      &#9474;               &#9474;
+                     VCC             GND     (VCC da <b>placa sEMG</b>)</pre>
+  <p>O par de 100 k polariza o nó em VCC/2 = 1,65 V, que é exatamente onde <code>LP_OUT</code> vivia, e o <code>R6</code> forma um divisor de 0,515 — os ±1,40 V viram ±0,72 V, ou 47 % da janela do ADC. <strong>Não precisa de capacitor:</strong> o meio de escala do DAC e o VCC/2 da placa já coincidem em 1,65 V, e a diferença entre os dois trilhos de 3,3 V vira alguns milivolts de offset, que o filtro digital do firmware remove.</p>
+  <div class="call good">
+    <span class="lab">O test point serve duas vezes</span>
+    <p>A saída do buffer é também onde vai o segundo canal do osciloscópio no laboratório, para monitorar o que está sendo injetado: é a mesma forma de onda dos terminais, escalada por exatamente 501, mas em <strong>volts</strong> — onde um osciloscópio de 8 bits consegue ver. Nos 5,6 mV do <code>TAP</code> ele não vê nada.</p>
+  </div>
+
+  <h3>Lista de materiais</h3>
+  <div class="tw">
+    <table>
+      <thead><tr><th class="n">Qt.</th><th>Componente</th><th>Observação</th></tr></thead>
+      <tbody>
+        <tr><td class="n">1</td><td><code>LM358</code> (DIP-8)</td><td><strong>alimentado com 5 V, não com 3,3 V</strong> — em 3,3 V o teto dele (V+ − 1,5 V = 1,8 V) não alcança os 3,05 V do sinal. Em 5 V sobram 0,45 V de margem. Alternativa rail-to-rail que roda em 3,3 V: <code>MCP6002</code></td></tr>
+        <tr><td class="n">1</td><td>R2 — 100 kΩ <strong>0,1 %</strong></td><td>define a razão; é o componente crítico</td></tr>
+        <tr><td class="n">1</td><td>R3 — <strong>200 Ω, 0,1 %</strong></td><td>fixo. Junto com R2 define a razão de 1:501</td></tr>
+        <tr><td class="n">1</td><td>R1 — 1 kΩ 1 %</td><td>filtro anti-imagem</td></tr>
+        <tr><td class="n">2</td><td>R4/R5 — 10 kΩ 1 %</td><td>emulação de impedância de eletrodo</td></tr>
+        <tr><td class="n">3</td><td>R6 — 47 kΩ; R7/R8 — 100 kΩ, 1 %</td><td>ramo de injeção no <code>R20</code> (ensaio 2)</td></tr>
+        <tr><td class="n">1</td><td>C1 — 100 nF filme</td><td>filtro anti-imagem</td></tr>
+        <tr><td class="n">4</td><td>C2–C5 — <strong>1 µF filme</strong> (MKT, 63 V)</td><td>um par por destino. <strong>Não eletrolítico:</strong> a fuga atravessa 1 MΩ e cria offset</td></tr>
+        <tr><td class="n">2</td><td>100 nF cerâmico + 10 µF</td><td>desacoplamento do U1, no trilho de <strong>5 V</strong></td></tr>
+        <tr><td class="n">1</td><td>Barra de pinos + 2 jumpers</td><td><code>JP1</code>/<code>JP2</code> em paralelo com R4/R5 (único elemento comutável), mais os test points TP1/TP2</td></tr>
+        <tr><td class="n">1</td><td>Placa perfurada + <strong>caixa metálica</strong></td><td>a 2 mV, montagem aberta capta 60 Hz. Não é capricho</td></tr>
+        <tr><td class="n">—</td><td>Cabo blindado na entrada; pares trançados curtos (&lt;15 cm) nas saídas</td><td>quanto mais curto, melhor</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="call info">
+    <span class="lab">Resistores de 0,1 %, não multímetro de precisão</span>
+    <p>A razão de atenuação tem de ser conhecida com exatidão. Resistores de 0,1 % custam ~R$ 2 e dão a razão em 0,14 % <em>por construção</em>; um multímetro de bancada de 4½ dígitos custa ~R$ 700 para medir resistores de 1 % e chegar no mesmo lugar. E resolve um problema sem outra saída: <strong>não dá para medir 5 mV pp com confiança em instrumento de bancada barato</strong> — a cadeia de calibração passa a ser a razão dos resistores.</p>
+  </div>
+</section>
+
+<section id="estimulo">
+  <h2 class="sec"><i>3</i>O arquivo de estímulo</h2>
+  <p class="dek">Um laço de 6,5 s que resolve alinhamento e piso de ruído sem ensaio extra.</p>
+
+  <p>Os três braços têm de ser alinhados no tempo, e nossa placa não tem entrada de <em>trigger</em>. A solução é pôr o alinhamento <strong>dentro do sinal</strong>:</p>
+
+<pre>0,0 – 0,5 s   silêncio          → piso de ruído medido de cada braço
+0,5 – 0,8 s   3 ciclos, 100 Hz  → <b>marcador de alinhamento</b>
+0,8 – 1,3 s   silêncio
+1,3 – 1,8 s   varredura 20→500  → verificação rápida de banda
+1,8 – 2,3 s   silêncio
+2,3 – 6,3 s   sidekicking do dataset, normalizado a ±1,0
+6,3 – 6,5 s   silêncio           → repete</pre>
+
+  <p>O marcador aparece nos dados dos três braços, então o alinhamento sai de uma <strong>correlação cruzada</strong> em vez de inspeção visual. E o silêncio da frente dá o piso de ruído <em>medido</em> de cada braço — melhor do que a estimativa do artigo, que tirava o ruído dos “segmentos de repouso” do próprio EMG, onde há atividade residual.</p>
+
+  <h4>No STM32</h4>
+  <ul>
+    <li><strong>Tabela em flash, DAC por timer + DMA a 8 kS/s.</strong> 6,5 s × 8 kS/s × 2 B = <strong>104 kB</strong> — nem chega perto de apertar num H5 (as peças maiores têm 2 MB). Se a flash apertar, 4 kS/s também serve e cai para 52 kB.</li>
+    <li><strong>Reamostre offline</strong> com <code>scipy.signal.resample_poly</code>; não interpole em tempo real.</li>
+    <li><strong>Modo 2 — varredura por passos</strong>, para a resposta em frequência: gere a senoide <em>em tempo real</em> com tabela de um período e acumulador de fase, trocando a frequência a cada 2 s. Zero flash. Um botão ou um comando escolhe entre os dois modos.</li>
+    <li><strong>Registre o hash SHA-256</strong> da tabela em todo caderno de bancada. Regerar o arquivo invalida a comparação.</li>
+  </ul>
+
+  <div class="call">
+    <span class="lab">Por que 12 bits bastam</span>
+    <p>A atenuação divide o sinal <strong>e o ruído de quantização do DAC na mesma proporção</strong> — a SNR da fonte atravessa o atenuador intacta. Usando ±1,40 V em torno do meio da escala você gasta 85 % dos códigos, o que dá ~72 dB de SNR na fonte. É 60 dB acima dos 9 dB que se quer medir. O que <em>não</em> é atenuado é o ruído do atenuador e do INA317 — e por isso a impedância de saída fica em 200 Ω.</p>
+  </div>
+</section>
+
+<section id="e1">
+  <h2 class="sec"><i>E1</i>Calibrar a placa com o DAC</h2>
+  <p class="dek">Em casa, um dia. Sem clínico. É o que transforma o ensaio 3 de “sinal parecido” em medida em milivolts.</p>
+
+  <p><strong>Precisa:</strong> STM32 + circuito de condicionamento, nossa placa, notebook com BLE, multímetro. Osciloscópio ajuda no passo 1, mas pode esperar a ida ao laboratório.</p>
+
+  <ol class="steps">
+    <li><div><p><strong>Confira o atenuador sem medir milivolt.</strong> Com o circuito <em>desligado</em>, meça <code>R2</code> entre <code>TP1</code> e <code>TAP</code> (100 kΩ) e <code>R3</code> entre <code>TAP</code> e GND (200 Ω) no multímetro. Anote os dois.</p>
+      <span class="exp"><b>Esses dois valores <i>são</i> a calibração do atenuador</b> — a razão sai da conta, não de instrumento. <i>Por que não medir a saída direto:</i> 5,59 mV pp está no fundo de escala de qualquer osciloscópio de bancada, afogado no ruído do próprio instrumento. Medir dois resistores é mais confiável do que medir esse sinal.</span></div></li>
+
+    <li><div><p><strong>Calibre a amplitude do DAC.</strong> Toque 100 Hz em amplitude plena, meça a saída do seguidor com o multímetro em AC e ajuste a amplitude digital até o pico ser <strong>exatamente ±1,400 V</strong>.</p>
+      <span class="exp"><b>Toda a tabela de amplitudes depende disso.</b> Anote o código do DAC que corresponde a ±1,400 V — deve ficar perto de 2048 ± 1738.</span></div></li>
+
+    <li><div><p><strong>Ganho fim a fim.</strong> Posição de 200 Ω, senoide de 100 Hz, gravando pelo BLE com <code>power_profiling/ble_client.py</code>. Calcule códigos pp por mV pp nos terminais.</p>
+      <span class="exp"><b>Esperado no ganho de boot (2×):</b> 9 230 códigos pp para 5,59 mV pp, ou <b>1 651 códigos/mV</b>. No ganho de 4× são 3 302 códigos/mV — o número é por ganho, então refaça para cada ganho que você usar no ensaio 3. <b>Este é o número de calibração</b> que converte todo dado de BLE de códigos para mV nos terminais. Mede-se uma vez, vale para tudo.</span></div></li>
+
+    <li><div><p><strong>Linearidade e ponto de ceifamento.</strong> Repita em 10 amplitudes, de −40 dBFS a −3 dBFS.</p>
+      <span class="exp"><b>Esperado:</b> reta com R² &gt; 0,999 até ~60 % da janela, depois compressão. <b>Anote onde comprime</b> — é a saturação real da placa nova, que caiu ~20 % em relação à do artigo (trilho de 3,3 V com REF em 1,65 V, contra 5 V com MAX6106 em 2,048 V).</span></div></li>
+
+    <li><div><p><strong>Piso de ruído.</strong> DAC em <strong>silêncio digital</strong> (código de meia escala, parado), caixa fechada, ganho ajustável em 11× — aqui o ganho alto ajuda, porque não há sinal para ceifar.</p>
+      <span class="exp"><b>Esperado:</b> ~11 códigos RMS (no ganho de boot cai para ~2 e não se distingue da quantização). O piso é o do INA317: ~1,2 µV RMS referido à entrada em 20–400 Hz. <i>Se aparecer 60 Hz:</i> caixa aberta, fios longos, ou fonte comutada por perto.</span></div></li>
+
+    <li><div><p><strong>Resposta em frequência da nossa placa</strong> — e esta é a parte que <em>não</em> precisa do laboratório. Modo 2 do STM32: varredura por passos, 1/3 de oitava de 10 a 800 Hz, 2 s por frequência, na amplitude de trabalho. Para cada uma, RMS na saída ÷ RMS injetado.</p>
+      <span class="exp"><b>Produz metade da Figura 6 do artigo</b>, com eixo de frequência confiável. <b>Esperado:</b> −3 dB perto de 20 Hz e de 400 Hz. <i>Lembre:</i> o firmware aplica um Butterworth digital de 20–400 Hz por cima do analógico — os dois aparecem juntos nesta medida.</span></div></li>
+
+    <li><div><p><strong>Teste de saturação.</strong> Mesma amplitude de trabalho, ganho ajustável em <strong>11×</strong> — com 5,59 mV pp isso dá 5,11 V pp pedidos numa janela de 3,10 V.</p>
+      <span class="exp"><b>Esperado:</b> ceifamento visível e <strong>simétrico</strong>. A simetria é o teste da troca de referência: na placa do artigo o pico positivo ceifava ~16 % antes do negativo.</span></div></li>
+  </ol>
+</section>
+
+<section id="e2">
+  <h2 class="sec"><i>E2</i>Injetar direto no ADC</h2>
+  <p class="dek">Em casa, meia hora. Nenhum circuito novo. Separa o front-end analógico do digitalizador.</p>
+
+  <p>Existe um <strong><code>R20</code> de 0 Ω</strong> entre <code>LP_OUT</code> (saída do filtro passa-baixa) e a entrada do ADS112C04, e o firmware lê <code>AIN0 vs AVSS</code> single-ended. Levantando esse resistor você injeta depois de todo o analógico.</p>
+
+  <p>A comparação entre as duas injeções decompõe a cadeia:</p>
+  <ul>
+    <li>injeção nos <strong>terminais</strong> → mede front-end analógico <strong>+</strong> ADC + firmware</li>
+    <li>injeção em <strong><code>R20</code></strong> → mede só ADC + firmware</li>
+  </ul>
+  <p>A diferença é a contribuição do front-end. Se a SNR sair pior que a do clínico no ensaio 3, este par de medições diz <strong>onde</strong> — e é exatamente o que um revisor pergunta.</p>
+
+  <ol class="steps">
+    <li><div><p><strong>Levante o lado do ADC do <code>R20</code></strong> e solde um fio fino. Guarde o resistor.</p>
+      <span class="exp"><i>Cuidado:</i> é 0805. Faça com fluxo e ponta fina, e confira com lupa antes de energizar.</span></div></li>
+    <li><div><p><strong>Ligue o ramo de injeção</strong> (<code>R6</code>/<code>R7</code>/<code>R8</code>, §2) entre a saída do buffer e o pad do <code>R20</code>, e traga o VCC da placa sEMG para o divisor de polarização.</p>
+      <span class="exp"><b>Esperado:</b> ±0,72 V no pad do ADC, polarizado em 1,65 V — 47 % da janela, sem ganho nenhum depois. <i>Confira com o multímetro</i> que o DC do nó está em 1,65 V <b>antes</b> de energizar a placa.</span></div></li>
+    <li><div><p><strong>Repita os passos 3, 5 e 6 do ensaio 1</strong> (ganho, piso de ruído, resposta em frequência) nesta injeção.</p>
+      <span class="exp"><b>Produz:</b> banda e piso do conjunto ADC + filtro digital, isolados. <b>Esperado:</b> banda igual à do firmware (20–400 Hz digital) sem o analógico; piso muito mais baixo, porque o ruído do INA317 saiu da conta.</span></div></li>
+    <li><div><p><strong>Recoloque o <code>R20</code></strong> e confirme que a placa voltou a ler pelos terminais antes de guardar.</p>
+      <span class="exp"><i>Não vá para o laboratório</i> com o <code>R20</code> levantado.</span></div></li>
+  </ol>
+</section>
+
+<section id="e3">
+  <h2 class="sec"><i>E3</i>Os três braços, simultâneos</h2>
+  <p class="dek">No laboratório, meia sessão. O ensaio do artigo, refeito.</p>
+
+  <p><strong>Precisa:</strong> tudo do ensaio 1, mais o EMG clínico e o osciloscópio. Notebook na bateria, USB da placa desconectada.</p>
+
+  <ol class="steps">
+    <li><div><p><strong>Antes de sair de casa:</strong> ensaios 1 e 2 concluídos, ganho fim a fim medido, tabela do DAC com hash anotado, supercapacitor carregado, <code>R20</code> recolocado.</p></div></li>
+
+    <li><div><p><strong>Descubra o que os terminais de injeção do clínico esperam.</strong> Nível (mV de eletrodo, ou algo maior), se são diferenciais, e onde fica a referência.</p>
+      <span class="exp"><b>Se for nível de eletrodo (mV):</b> os dois sistemas compartilham o mesmo <code>TAP</code>, e é isso que garante entrada idêntica <em>por construção</em>. <b>Se exigir nível maior:</b> ele ganha um divisor próprio saindo do seguidor — e aí você <i>perde</i> essa garantia e passa a ter de medir as duas entradas separadamente. Vale insistir em compartilhar o TAP.</span></div></li>
+
+    <li><div><p><strong>Monte, e não meça nada ainda.</strong> Condicionamento em caixa fechada, pares trançados curtos, osciloscópio como único terra.</p></div></li>
+
+    <li><div><p><strong>Verificação de silêncio — o passo que salva a sessão.</strong> Grave 30 s com o DAC em silêncio, nos dois braços de hardware.</p>
+      <span class="exp"><b>Compare com o piso medido em casa</b> (ensaio 1, passo 5). <i>Se estiver pior:</i> é laço de terra ou ambiente do laboratório, não a placa. <b>Resolva agora</b> — depois de gravar não tem volta.</span></div></li>
+
+    <li><div><p><strong>Confira os níveis.</strong> 5,59 mV pp no <code>TAP</code>, e o ceifamento na nossa placa e na saída do clínico.</p>
+      <span class="exp"><b>Esperado:</b> 5,6 mV pp injetados; nossa placa em ~60 % da janela com ganho ajustável 4×. Ajuste os ganhos <em>antes</em> de gravar.</span></div></li>
+
+    <li><div><p><strong>Grave dez laços</strong> (65 s), simultaneamente nos dois caminhos. Depois repita com o ganho ajustável em dois outros níveis.</p>
+      <span class="exp"><b>Produz os dados do artigo 2.</b> Dez laços dão média coerente e uma estimativa de repetibilidade de graça.</span></div></li>
+
+    <li><div><p><strong>Resposta em frequência do clínico.</strong> Modo 2 do STM32, a mesma varredura por passos do ensaio 1, gravando pelo osciloscópio.</p>
+      <span class="exp"><b>Produz a outra metade da Figura 6.</b> Com a nossa metade já levantada em casa, isto são 10 minutos.</span></div></li>
+
+    <li><div><p><strong>Repita com <code>R4</code>/<code>R5</code> abertos</strong> (10 kΩ de impedância de eletrodo em série).</p>
+      <span class="exp"><b>Produz:</b> a sensibilidade à impedância de eletrodo — o argumento de que o resultado vale fora da bancada, sem precisar de pele.</span></div></li>
+
+    <li><div><p><strong>Antes de desmontar, abra os arquivos</strong> e confirme que o marcador de 100 Hz está visível nos dois.</p>
+      <span class="exp"><i>Se faltar em algum:</i> aquele braço não alinha, e desmontar a bancada torna a sessão irrecuperável.</span></div></li>
+
+    <li><div><p><strong>Folha de dados da sessão</strong>, em papel: modelo e série do clínico, ajustes de ganho e filtro dele, <strong>taxa de amostragem que o osciloscópio usou de fato</strong>, hash da tabela do DAC, faixa do atenuador, nível do DS3502, V_CAP inicial e final.</p>
+      <span class="exp"><b>É exatamente esta folha que não existiu no artigo</b> — e a falta da taxa de amostragem é o motivo de a Figura 6 antiga não ser recuperável.</span></div></li>
+  </ol>
+
+  <h3>A análise, depois</h3>
+  <p>Com os três registros alinhados pelo marcador e convertidos para mV pelo número de calibração do ensaio 1:</p>
+  <ul>
+    <li><strong>SNR dos três</strong>, com o ruído vindo dos trechos de silêncio (medido) e não dos segmentos de repouso (estimado).</li>
+    <li><strong>Morfologia no tempo</strong> — envelope RMS em janelas de 50 ms <em>reais</em>, agora que a base de tempo dos três é conhecida.</li>
+    <li><strong>Resposta em frequência dos dois sistemas</strong>, do passo 7 e do ensaio 1 passo 6.</li>
+    <li><strong>Erro ponto a ponto contra o dataset</strong> — possível pela primeira vez, porque os três estão na mesma escala de tempo e de amplitude.</li>
+  </ul>
+</section>
+
+<section id="confirmar">
+  <h2 class="sec"><i>4</i>Três coisas a confirmar antes de montar</h2>
+
+  <div class="tw">
+    <table>
+      <thead><tr><th class="n">#</th><th>O quê</th><th>Por que trava</th></tr></thead>
+      <tbody>
+        <tr><td class="n">1</td><td>O seu <strong>H5 tem DAC</strong>?</td><td>Nem todo H5 tem: as <strong>H563/H573</strong> trazem DAC1 de 12 bits em PA4/PA5; a <strong>H503</strong> não tem. Confira o part number exato. Se não tiver, um <code>MCP4922</code> (SPI, ~R$ 20) resolve e não muda mais nada no circuito</td></tr>
+        <tr><td class="n">2</td><td>Os terminais de injeção do clínico: <strong>que nível e que topologia</strong>?</td><td>decide se os dois sistemas compartilham o <code>TAP</code> — que é o que torna a comparação airtight (ensaio 3, passo 2)</td></tr>
+        <tr><td class="n">3</td><td>Recompilar com <code>DS3502_RES_3K_OHM</code>?</td><td>é o ponto de operação de 4× (60 % da janela). Sem isso você fica em 2× e usa 30 % — funciona, só com menos margem sobre o piso de ruído</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="call info">
+    <span class="lab">Se o Robert for fazer PCB</span>
+    <p>Todos os componentes existem em PTH, inclusive os de 0,1 % (filme metálico, tipo Vishay MRS25) e os de 1 µF de filme (MKT, passo 5 mm). Três pedidos que custam pouco agora e doem depois:</p>
+    <ul>
+      <li><strong>Plano de terra na camada inferior</strong>, trilhas de milivolt curtas e com terra dos dois lados. A caixa metálica continua valendo.</li>
+      <li><strong>Incluir o ramo do <code>R20</code></strong> (<code>R6</code>/<code>R7</code>/<code>R8</code> mais o test point da saída do buffer). São três furos.</li>
+      <li><strong>Duas alimentações separadas:</strong> 5 V para o LM358, e uma entrada de VCC vinda da placa sEMG só para o divisor de polarização. São nós diferentes — não junte.</li>
+    </ul>
+  </div>
+
+  <div class="call good">
+    <span class="lab">O que ficou de fora, de propósito</span>
+    <p>Consumo por subsistema, ruído do trilho de 3,3 V, carga e autonomia do supercapacitor — tudo isso está em <code>ENSAIOS_ARTIGO_2.pdf</code> e <code>BANCADA_ENSAIOS.pdf</code>. São o argumento de <em>energia</em> do artigo, e o checklist do protocolo do Robert. Este documento é só o argumento de <strong>qualidade de sinal</strong>.</p>
+  </div>
+</section>
+
+<footer>
+  <p><b>Documentos irmãos —</b> <code>ENSAIOS_ARTIGO_2.pdf</code> (o quê e por quê, todos os ensaios) · <code>BANCADA_ENSAIOS.pdf</code> (bancada completa, inclusive energia)<br>
+  <b>Hardware —</b> <code>sEMG_Shematic_versao_final.PDF</code> folha 1 (front-end e ADC, <code>R20</code>)<br>
+  <b>Scripts —</b> <code>power_profiling/ble_client.py</code> (cliente BLE, decodifica os blocos de 60 amostras)</p>
+</footer>
+
+</div>
+</body>
+</html>
