@@ -41,9 +41,28 @@ static int failures;
 #define HALF   BOARD_DAC_HALF_LEN
 #define CELL   PLAYER_SYNC_CELL_SAMPLES
 
-/* O estimulo esta nos bits 27:16 (canal 2 = PA5), o sync nos 11:0 (PA4). */
+/* Em qual metade da palavra cada canal cai depende de BOARD_STIM_ON_PA4
+ * (ver common/board.h). check_word_layout() confere que isto acompanha o que
+ * BOARD_DAC_WORD realmente monta, para a troca do pino nao passar batido. */
+#if BOARD_STIM_ON_PA4
+static uint16_t stim(uint32_t w) { return (uint16_t)(w & 0xFFFu); }
+static uint16_t sync(uint32_t w) { return (uint16_t)((w >> 16) & 0xFFFu); }
+#else
 static uint16_t stim(uint32_t w) { return (uint16_t)((w >> 16) & 0xFFFu); }
 static uint16_t sync(uint32_t w) { return (uint16_t)(w & 0xFFFu); }
+#endif
+
+static void check_word_layout(void)
+{
+    uint32_t w = BOARD_DAC_WORD(0xABCu, 0x123u);
+    CHECK(stim(w) == 0xABCu && sync(w) == 0x123u,
+          "stim()/sync() nao acompanham BOARD_DAC_WORD: estimulo %03x, sync %03x "
+          "(esperado abc e 123) - revise o #if BOARD_STIM_ON_PA4 aqui e em board.h",
+          stim(w), sync(w));
+    printf("layout: estimulo no %s, sync no %s\n",
+           BOARD_STIM_ON_PA4 ? "PA4 (canal 1)" : "PA5 (canal 2)",
+           BOARD_STIM_ON_PA4 ? "PA5 (canal 2)" : "PA4 (canal 1)");
+}
 
 /* Gera n amostras em blocos de meia janela, como o DMA pediria. */
 static void run(uint32_t *out, uint32_t n)
@@ -336,6 +355,20 @@ static void test_cli(void)
 
     cli_cmd("info\r");
     CHECK(strstr(uart_out, STIMULUS_SHA256) && strstr(uart_out, "OK"), "info mostra SHA e CRC ok");
+    /* O status tem de refletir o segmento JA no mesmo comando: ele vinha de
+     * player_events(), que a interrupcao so atualiza na proxima meia janela,
+     * e por isso aparecia um comando atrasado. */
+    for (uint32_t i = 0; i < STIMULUS_SEGMENT_COUNT; i++) {
+        char cmd[24];
+        snprintf(cmd, sizeof(cmd), "seg %u\r", i);
+        cli_cmd(cmd);
+        CHECK(strstr(uart_out, stimulus_segment_names[i]) != NULL,
+              "seg %u: a resposta nao cita %s (status atrasado?): %s",
+              i, stimulus_segment_names[i], uart_out);
+        cli_cmd("status\r");
+        CHECK(strstr(uart_out, stimulus_segment_names[i]) != NULL,
+              "status depois de seg %u nao cita %s", i, stimulus_segment_names[i]);
+    }
     cli_cmd("status\r");
     CHECK(strstr(uart_out, "seg ") != NULL, "status mostra o segmento");
     cli_cmd("xyz\r");
@@ -345,8 +378,14 @@ static void test_cli(void)
 
 int main(void)
 {
-    printf("tabela: %u segmentos, preambulo %u, segmento %u, laco %u amostras\n\n",
+    printf("tabela: %u segmentos, preambulo %u, segmento %u, laco %u amostras\n",
            STIMULUS_SEGMENT_COUNT, STIMULUS_PREAMBLE_LEN, STIMULUS_SEGMENT_LEN, STIMULUS_LOOP_LEN);
+    check_word_layout();
+    if (failures) {   /* sem o layout certo, todo o resto falha em cascata */
+        printf("\nlayout da palavra do DMA errado - corrija antes de ler o resto\n");
+        return 1;
+    }
+    printf("\n");
     test_all_segments();
     test_sync_pulse_count();
     test_cycle();

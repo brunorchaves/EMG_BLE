@@ -91,10 +91,18 @@ void cli_print_info(void)
     cli_puts(" MHz  clock ");
     cli_puts(bi->hse_ok ? "HSE (MCO 8 MHz do ST-LINK)\n"
                         : "HSI (!! HSE falhou: base de tempo +-1%, nao use para ensaio)\n");
+#if BOARD_STIM_ON_PA4
+    cli_puts("dac      PA4 = ESTIMULO (Zio D24), PA5 = sync, ");
+    cli_putu(BOARD_DAC_FS_HZ);
+    cli_puts(" S/s\n");
+    cli_puts("         !! PA4 e VBUS_SENSE (SB56): carga no sinal, USB de usuario FORA,\n");
+    cli_puts("         !! medir a amplitude no TP1 - nao assuma +-1,400 V\n");
+#else
     cli_puts("dac      PA5 = ESTIMULO (Zio D13), PA4 = sync, ");
     cli_putu(BOARD_DAC_FS_HZ);
     cli_puts(" S/s\n");
     cli_puts("         PA4 e VBUS_SENSE nesta placa (SB56) - so gatilho, nao meca nele\n");
+#endif
     cli_puts("sync     (segmento+1) pulsos de 10 ms no inicio de cada laco\n");
     cli_puts("table    laco de ");
     cli_putfix((float)STIMULUS_LOOP_LEN / (float)STIMULUS_FS, 3);
@@ -129,9 +137,9 @@ void cli_print_status(void)
     cli_puts(player_mode_name(c.mode));
     if (c.mode == PLAYER_LOOP || c.mode == PLAYER_ONCE) {
         cli_puts("  seg ");
-        cli_putu(e.segment);
+        cli_putu(c.segment);
         cli_puts(" ");
-        cli_puts(stimulus_segment_names[e.segment]);
+        cli_puts(stimulus_segment_names[c.segment]);
         if (c.cycle) cli_puts(" (cycle)");
     }
     if (c.mode == PLAYER_SINE) {
@@ -198,10 +206,9 @@ static void put_padded(const char *s, uint32_t width)
 
 static void print_segments(void)
 {
-    player_events_t e = player_events();
     player_cfg_t c = player_config();
     for (uint32_t i = 0; i < STIMULUS_SEGMENT_COUNT; i++) {
-        cli_puts(i == e.segment ? " *" : "  ");
+        cli_puts(i == c.segment ? " *" : "  ");
         cli_putu(i);
         cli_puts("  ");
         put_padded(stimulus_segment_names[i], 14);

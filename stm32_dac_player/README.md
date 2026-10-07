@@ -14,17 +14,28 @@ trocam de modo; no laboratório não precisa de PC.
 
 | Sinal | Pino | Nucleo-144 (Zio) | Para onde |
 |---|---|---|---|
-| **Estímulo** (DAC canal 2) | **PA5** | CN7 pino 10 (**D13**) | J1 "DAC" do condicionamento — **é este que se mede** |
-| Sincronismo (DAC canal 1) | PA4 | CN7 pino 17 (D24) | gatilho do osciloscópio (opcional) |
+| **Estímulo** (DAC canal 1) | **PA4** | CN7 pino 17 (**D24**) | J1 "DAC" do condicionamento — **é este que se mede** |
+| Sincronismo (DAC canal 2) | PA5 | CN7 pino 10 (D13) | gatilho do osciloscópio |
 | Terra | GND | qualquer GND | GND comum da bancada |
 
-> **O estímulo é o PA5, não o PA4.** Na NUCLEO-H563ZI o PA4 está amarrado ao
+> **Os canais estão trocados de propósito, por `BOARD_STIM_ON_PA4` em
+> `common/board.h`.** A bancada do ensaio já está cabeada no PA4 e não pode ser
+> remexida, então o estímulo saiu para o PA4 e o sync para o PA5. O padrão do
+> firmware (`BOARD_STIM_ON_PA4 0`) é o inverso, e é o elétricamente melhor —
+> ver abaixo.
+>
+> **O preço de usar o PA4.** Na NUCLEO-H563ZI o PA4 está amarrado ao
 > **VBUS_SENSE** pela ponte de solda **SB56** (ele é o ADC1_INP18 do sense de
-> USB) — o divisor carrega a saída e aparecem ~660 mV parasitas quando o USB de
-> usuário está ligado. O suporte desta placa no Zephyr usa `dac1_out2_pa5` pelo
-> mesmo motivo. Sobrou para o PA4 o pulso de sync, que é só gatilho e aguenta a
-> carga, **desde que o USB de usuário fique desconectado** — o que a bancada do
-> ensaio já exige. Abrir o SB56 libera o PA4 por completo.
+> USB). O divisor carrega a saída do DAC — o buffer fica fora da especificação
+> de carga mínima e a excursão comprime perto dos trilhos — e aparecem ~660 mV
+> parasitas quando o USB de usuário está ligado. O suporte desta placa no
+> Zephyr usa `dac1_out2_pa5` por esse motivo. Com a troca ligada:
+>
+> - **o USB de usuário tem de ficar desconectado** (o do ST-LINK pode ficar);
+> - **a amplitude tem de ser medida no `TP1` e reduzida até ficar linear** —
+>   não assuma os ±1,400 V do projeto. O `--linearity` do `player_cli.py`
+>   (E1 passo 4) mostra onde começa a compressão;
+> - **abrir o SB56 libera o PA4 por completo** e remove as duas ressalvas.
 
 O LM358 do condicionamento é alimentado em **5 V** (o pino 5V da Nucleo serve),
 não em 3,3 V. Confira a serigrafia antes de soldar (UM3115 para a H563ZI,

@@ -324,7 +324,7 @@ def main() -> None:
         },
         "marker": {"at_s": MARKER_AT_S, "hz": MARKER_HZ, "cycles": MARKER_CYCLES},
         "dead_zone_s": DEAD_ZONE_S,
-        "sync": "o canal 2 do DAC (PA5) emite (indice+1) pulsos de 10 ms no inicio de cada laco",
+        "sync": "o canal de sync do DAC emite (indice+1) pulsos de 10 ms no inicio de cada laco; o pino depende de BOARD_STIM_ON_PA4 em common/board.h - ver o comando info do firmware",
         "dataset": {
             "name": "UCI EMG Physical Action Data Set (Theodoridis 2011, DOI 10.24432/C53W49)",
             "zip_sha256": sha256_file(ZIP_PATH) if ZIP_PATH.exists() else None,

@@ -26,9 +26,23 @@
 /* Meia janela do pingue-pongue, em amostras. 256 amostras = 32 ms a 8 kS/s. */
 #define BOARD_DAC_HALF_LEN   256u
 
-/* Palavra do DMA = DHR12RD: bits 11:0 vao para o canal 1 (PA4, sync) e
- * bits 27:16 para o canal 2 (PA5, estimulo). */
+/* Palavra do DMA = DHR12RD: bits 11:0 vao para o canal 1 (PA4) e bits 27:16
+ * para o canal 2 (PA5).
+ *
+ * BOARD_STIM_ON_PA4 troca os dois: o ESTIMULO passa a sair no PA4 e o sync no
+ * PA5. Necessario quando a bancada ja esta cabeada no PA4 e nao se pode
+ * remexer no hardware. O preco e a carga do divisor de VBUS_SENSE (SB56) sobre
+ * o sinal: o buffer do DAC fica fora de especificacao de carga minima, e a
+ * excursao comprime perto dos trilhos. Com a troca ligada, o USB DE USUARIO
+ * TEM DE FICAR DESCONECTADO (o do ST-LINK pode ficar) e a amplitude tem de ser
+ * medida no TP1 e reduzida ate ficar linear - nao assuma os +-1,400 V. */
+#define BOARD_STIM_ON_PA4 1
+
+#if BOARD_STIM_ON_PA4
+#define BOARD_DAC_WORD(stim, sync) ((uint32_t)(stim) | ((uint32_t)(sync) << 16))
+#else
 #define BOARD_DAC_WORD(stim, sync) ((uint32_t)(sync) | ((uint32_t)(stim) << 16))
+#endif
 
 typedef enum {
     BOARD_LED_STATUS = 0, /* verde (LD1, PB0) */
