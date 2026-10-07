@@ -1,8 +1,9 @@
 # stm32_dac_player — estímulo sEMG por DAC
 
-Firmware para **NUCLEO-H563ZI** e **NUCLEO-F767ZI** que toca no DAC o trecho de
-*sidekicking* do dataset do artigo, para os ensaios de qualidade de sinal
-([TRES_ENSAIOS_SINAL.pdf](../docs/TRES_ENSAIOS_SINAL.pdf) §3). A saída vai para o
+Firmware para **NUCLEO-H563ZI** e **NUCLEO-F767ZI** que toca no DAC trechos do
+dataset do artigo (8 ações, de Sidekicking a Standing), para os ensaios de
+qualidade de sinal ([TRES_ENSAIOS_SINAL.pdf](../docs/TRES_ENSAIOS_SINAL.pdf) §3).
+A saída vai para o
 [circuito de condicionamento](../docs/CIRCUITO_CONDICIONAMENTO.pdf) (LM358 → 1:501 → 5,59 mV pp)
 e de lá para a placa sEMG e para o EMG clínico.
 
@@ -13,19 +14,28 @@ trocam de modo; no laboratório não precisa de PC.
 
 | Sinal | Pino | Nucleo-144 (Zio) | Para onde |
 |---|---|---|---|
-| Estímulo (DAC canal 1) | **PA4** | CN7 pino 17 (D24) | J1 "DAC" do condicionamento |
-| Sincronismo (DAC canal 2) | **PA5** | CN7 pino 10 (D13) | gatilho do osciloscópio (opcional) |
+| **Estímulo** (DAC canal 2) | **PA5** | CN7 pino 10 (**D13**) | J1 "DAC" do condicionamento — **é este que se mede** |
+| Sincronismo (DAC canal 1) | PA4 | CN7 pino 17 (D24) | gatilho do osciloscópio (opcional) |
 | Terra | GND | qualquer GND | GND comum da bancada |
 
-O pinout é o Zio padrão das duas placas. Confira na serigrafia antes de soldar
-(UM3115 para a H563ZI, UM1974 para a F767ZI). O LM358 do condicionamento é
-alimentado em **5 V** (o pino 5V da Nucleo serve), não em 3,3 V.
+> **O estímulo é o PA5, não o PA4.** Na NUCLEO-H563ZI o PA4 está amarrado ao
+> **VBUS_SENSE** pela ponte de solda **SB56** (ele é o ADC1_INP18 do sense de
+> USB) — o divisor carrega a saída e aparecem ~660 mV parasitas quando o USB de
+> usuário está ligado. O suporte desta placa no Zephyr usa `dac1_out2_pa5` pelo
+> mesmo motivo. Sobrou para o PA4 o pulso de sync, que é só gatilho e aguenta a
+> carga, **desde que o USB de usuário fique desconectado** — o que a bancada do
+> ensaio já exige. Abrir o SB56 libera o PA4 por completo.
 
-O **sync** é um pulso de 10 ms (0 → 3,1 V) que começa na amostra 0 de cada laço
-e de cada degrau da varredura. Ele sai pelo segundo canal do DAC, na mesma
-palavra de DMA do estímulo, então cai na amostra exata, sem o jitter de um GPIO
-acionado por interrupção. O alinhamento entre os três braços continua vindo do
-marcador de 100 Hz, que está dentro do próprio sinal.
+O LM358 do condicionamento é alimentado em **5 V** (o pino 5V da Nucleo serve),
+não em 3,3 V. Confira a serigrafia antes de soldar (UM3115 para a H563ZI,
+UM1974 para a F767ZI).
+
+O **sync** sai pelo outro canal do DAC, na mesma palavra de DMA do estímulo,
+então cai na amostra exata — sem o jitter de um GPIO acionado por interrupção.
+São **(índice do segmento + 1) pulsos de 10 ms** no início de cada laço, então a
+própria gravação do osciloscópio diz qual ação estava tocando, sem depender de
+contar laços desde o início da sessão. O alinhamento fino entre os três braços
+continua vindo do marcador de 100 Hz, que está dentro do próprio sinal.
 
 ## Uso rápido
 
@@ -88,7 +98,10 @@ Serial: porta do ST-LINK, 115200 8N1. `help` lista tudo.
 | `code <n>` | código DC fixo | conferir o DAC no multímetro |
 | `amp <n>` / `amp 1400mv` / `amp -20db` | amplitude de pico em códigos, mV na saída do DAC ou dBFS (0 dB = 2047) | E1 passos 2 e 4 |
 | `mid <n>` | código do centro (padrão 2048) | |
-| `status` / `info` | modo e amplitude / placa, relógio, tabela, SHA-256 e CRC | caderno de bancada |
+| `seg` | lista as 8 ações com origem e SNR | |
+| `seg <n\|nome>` | escolhe a ação (`seg 4`, `seg Walking`) | E3 |
+| `seg all` | cicla pelas 8, uma por laço (60 s por volta) | E3 — uma gravação pega tudo |
+| `status` / `info` | modo, ação e amplitude / placa, relógio, tabela, SHA-256 e CRC | caderno de bancada |
 | `events on` | imprime cada início de laço ou degrau | |
 
 A amplitude padrão é **1738 códigos = ±1,400 V** (85 % dos códigos, TRES_ENSAIOS §2).
@@ -101,17 +114,31 @@ Trocar a amplitude não recomeça o laço; trocar de modo recomeça.
 `tools/player_cli.py` manda comandos por script. `--linearity` faz o passo 4
 do E1: dez amplitudes de −40 a −3 dBFS, com o instante de cada troca.
 
-## O laço de estímulo (6,5 s @ 8 kS/s, 104 kB)
+## O laço de estímulo (7,5 s @ 8 kS/s)
+
+Os tempos são redondos de propósito — dá para cravar cursor no osciloscópio e
+para fatiar em script sem procurar borda:
 
 | Intervalo | Conteúdo | Para quê |
 |---|---|---|
-| 0,0–0,5 s | silêncio | piso de ruído medido de cada braço |
-| 0,5 s | 3 ciclos de 100 Hz (30 ms) | marcador de alinhamento por correlação cruzada |
-| 0,8–1,3 s | silêncio | |
-| 1,3–1,8 s | chirp linear 20 → 500 Hz | verificação rápida de banda |
-| 1,8–2,3 s | silêncio | |
-| 2,3–6,3 s | trecho do dataset, pico normalizado a ±1,0 | o sinal do ensaio |
-| 6,3–6,5 s | silêncio | → repete |
+| 0,000–0,200 s | silêncio | aqui vive o trem de pulsos de sync |
+| 0,200–0,230 s | 3 ciclos de 100 Hz | marcador de alinhamento por correlação cruzada |
+| 0,230–2,000 s | **zona morta (0 V)** | guarda antes da amostra, e o piso de ruído medido |
+| **2,000–6,000 s** | **a amostra**, pico normalizado a ±1,0 | o sinal do ensaio |
+| 6,000–7,500 s | **zona morta (0 V)**, 1,5 s | guarda depois da amostra → repete |
+
+A amostra abre exatamente **2,000 s** depois do primeiro pulso de sync e fecha
+exatamente em **6,000 s**, com 1,5 s de zona morta de cada lado. "Silêncio" é o
+código de meia escala no DAC, que depois do capacitor de acoplamento vira **0 V
+nos terminais** — então na gravação dos dois sistemas o início e o fim da
+amostra ficam entre dois trechos chatos e inconfundíveis de 0 V.
+
+> **O chirp saiu.** O layout do [TRES_ENSAIOS_SINAL](../docs/TRES_ENSAIOS_SINAL.pdf) §3
+> tinha também uma varredura de 20→500 Hz em 1,3–1,8 s, como "verificação rápida
+> de banda". Era redundante com o modo `sweep` (degraus de 1/3 de oitava, 2 s por
+> frequência), que é a medida de resposta em frequência de verdade dos ensaios E1
+> passo 6 e E3 passo 7 — e comia ~1 s de cada laço. Sem ela a amostra passou de
+> 62 % para 53 % do laço, mas em troca ganhou 1,5 s de zona morta de cada lado.
 
 ![laço](stimulus/stimulus_loop.png)
 
@@ -121,11 +148,16 @@ A tabela é gerada offline por [`tools/make_stimulus.py`](tools/make_stimulus.py
 - rampas de 10 ms nas bordas;
 - o pico é normalizado depois de reamostrar.
 
-O script grava a tabela em [`common/stimulus_table.c`](common/stimulus_table.c), mais a
-referência amostra a amostra para a análise ([`stimulus/stimulus_loop.csv`](stimulus/stimulus_loop.csv), `.wav`) e os parâmetros com o hash em
-[`stimulus/stimulus.json`](stimulus/stimulus.json).
+O preâmbulo (0–2,000 s) é igual para todas as ações, então vai para a flash uma
+vez só; a zona morta de saída o firmware gera na hora. Assim 8 segmentos custam
+**531 kB** em vez de 960 kB — 28 % da flash de 2 MB.
 
-**Tabela atual:** SHA-256 `b145c17c2bcf125bee1cda7f18b5bb8a801dec087caec36a2e58aea1dbdb2570`, CRC32 `0xcb4abf10`.
+O script grava a tabela em [`common/stimulus_table.c`](common/stimulus_table.c), mais a
+referência para a análise ([`stimulus/reference.npz`](stimulus/reference.npz) com todos os
+arrays, e um `.wav` por ação em [`stimulus/wav/`](stimulus/wav/)) e os parâmetros com o
+hash em [`stimulus/stimulus.json`](stimulus/stimulus.json).
+
+**Tabela atual:** SHA-256 `e9625fae6b306603f6e4c4097cab93c2ae003a7e6422762006ea6d9783d84094`, CRC32 `0x16ed33e5`.
 O `info` mostra os dois e confere o CRC na flash a cada boot. Anote o SHA no
 caderno de bancada. Regerar a tabela invalida a comparação entre sessões.
 
@@ -144,20 +176,42 @@ digitalizado e correlacionado com todas as janelas de 4 s de todos os 80
 arquivos × 8 canais, em quatro escalas de tempo. Nada passou de r = 0,66, que é
 nível de acaso: o "Original Signal" do artigo foi pré-processado de um jeito que
 não ficou registrado. Por isso a escolha é por critério, reprodutível em
-[`tools/pick_segment.py`](tools/pick_segment.py):
+[`tools/pick_segment.py`](tools/pick_segment.py), com o resultado versionado em
+[`stimulus/segments.json`](stimulus/segments.json):
 
-1. Sidekicking, só canais de perna.
-2. No máximo 0,5 % de amostras ceifadas.
-3. Entre 8 e 18 rajadas pelo método do artigo.
-4. SNR pelo método do artigo (envelope RMS de 50 ms, limiar de 20 %) mais perto
-   dos **10,7 dB** publicados para o sinal original.
+1. No máximo 0,5 % de amostras ceifadas (±4000 µV).
+2. Entre 8 e 18 rajadas pelo método do artigo.
+3. Maior SNR, ou — para o Sidekicking — a SNR mais perto dos **10,7 dB**
+   publicados para o sinal original.
+4. O **sub2 fica fora**: a UCI avisa que ele não foi filtrado.
 
-**Escolhido: sub4, coluna 4 (R-Thi, coxa direita), 4,90–8,90 s.** SNR de
-10,66 dB, 15 rajadas e 0,15 % ceifado. É a única janela de perna do
-Sidekicking que fica dentro do limite de ceifamento, fora do sub2 (que a UCI
-marca como não filtrado). Os reservas estão em
-[`stimulus/candidates.png`](stimulus/candidates.png). Para trocar:
-`make_stimulus.py --subject 3 --channel L-Thi --start 4.75`.
+**19 das 20 ações** do dataset têm trecho que passa. A única fora é **Punching**,
+cuja janela mais limpa tem 0,60 % de ceifamento.
+
+### As 8 ações escolhidas
+
+O artigo testou **uma** só (Sidekicking, agressivo, 10,7 dB). O conjunto aqui
+cobre de propósito a faixa dinâmica que ficou sem testar — de 7,6 dB (sinal
+fraco, caso difícil para o piso de ruído) a 21,1 dB:
+
+| # | Ação | Grupo | Origem | SNR | Ceifado |
+|---|---|---|---|---|---|
+| 0 | Sidekicking | Aggressive | sub4 R-Thi, t=4,90 s | 10,7 dB | 0,15 % |
+| 1 | Elbowing | Aggressive | sub4 R-Tri, t=5,50 s | 11,1 dB | 0,10 % |
+| 2 | Frontkicking | Aggressive | sub1 R-Bic, t=5,50 s | 13,9 dB | 0 |
+| 3 | Slapping | Aggressive | sub1 L-Tri, t=5,00 s | 14,5 dB | 0 |
+| 4 | Walking | Normal | sub4 R-Bic, t=1,50 s | 12,1 dB | 0 |
+| 5 | Handshaking | Normal | sub4 R-Ham, t=0,75 s | 21,1 dB | 0 |
+| 6 | Clapping | Normal | sub4 R-Bic, t=1,50 s | 14,9 dB | 0 |
+| 7 | Standing | Normal | sub4 R-Tri, t=0,25 s | 7,6 dB | 0 |
+
+O índice **0 é o Sidekicking** de propósito: 1 pulso de sync, igual ao
+comportamento de antes de existirem vários segmentos.
+
+Para trocar o conjunto, edite [`stimulus/segments.json`](stimulus/segments.json)
+e rode `make_stimulus.py` de novo (o SHA-256 muda — anote no caderno). Os
+candidatos de Sidekicking que ficaram de reserva estão em
+[`stimulus/candidates.png`](stimulus/candidates.png).
 
 Se as gravações brutas da sessão de 2025 aparecerem
 (ver [ENSAIOS_ARTIGO_2.md](../docs/ENSAIOS_ARTIGO_2.md)), dá para reabrir esta escolha.
@@ -165,10 +219,11 @@ Se as gravações brutas da sessão de 2025 aparecerem
 ## Como funciona
 
 ```
-TIM6 TRGO 8 kHz ──► DAC canal 1 (PA4)  ◄── DHR12RD ◄── DMA circular ◄── pingue-pongue 2 × 256 palavras
-                └─► DAC canal 2 (PA5)                    (meia janela = 32 ms)   ▲
-                                                                                 │ player_fill()
-                                              interrupção HT/TC ─────────────────┘ tabela / senoide / varredura
+TIM6 TRGO 8 kHz ──► DAC canal 2 (PA5, estímulo) ◄── DHR12RD ◄── DMA circular ◄── pingue-pongue 2 × 256 palavras
+                └─► DAC canal 1 (PA4, sync)                      (meia janela = 32 ms)   ▲
+                                                                                         │ player_fill()
+                                                      interrupção HT/TC ─────────────────┘ preâmbulo + segmento,
+                                                                                            ou senoide / varredura
 ```
 
 - A temporização é toda de hardware. A CPU só preenche a metade do buffer que o DMA acabou de esvaziar.
@@ -185,45 +240,61 @@ TIM6 TRGO 8 kHz ──► DAC canal 1 (PA4)  ◄── DHR12RD ◄── DMA cir
 | `tests/` | teste de host do player e da CLI: `python stm32_dac_player/tests/run_host_tests.py` (precisa de `pip install ziglang`) |
 
 O teste de host confere amostra a amostra, contra a tabela, dois laços inteiros
-e a posição exata do sync. Também cobre o `once`, a frequência de 12 degraus da
-varredura, a amplitude da senoide e o parser da CLI.
+de **cada uma das 8 ações** — estímulo e sync. Também cobre a contagem de pulsos
+de sync por segmento (e que ela termina antes do marcador), o `seg all` ciclando
+e voltando ao 0, o `once`, a frequência de 12 degraus da varredura, a amplitude
+da senoide e o parser da CLI.
 
 ## Verificação na bancada (H563ZI)
 
 1. `info`: o SHA bate com `stimulus/stimulus.json`, o CRC dá `OK` e o relógio aparece como `HSE`.
-2. `silence` com multímetro em PA4: cerca de 1,65 V.
+2. `silence` com multímetro em **PA5**: cerca de 1,65 V.
 3. `sine 100`, multímetro em AC na saída do seguidor. Ajuste `amp` até ±1,400 V de pico (≈ 0,990 V RMS) e anote o código. Esperado: perto de 1738.
-4. Sync no osciloscópio: período de **6,500 s** no `loop` e de 2,000 s no `sweep`.
-5. Botão cicla os modos, e o LED verde acompanha.
+4. Sync em PA4 no osciloscópio: período de **7,500 s** no `loop` e de 2,000 s no `sweep`. Conte os pulsos — devem ser (índice do segmento + 1).
+5. Com o cursor no primeiro pulso de sync: a amostra abre em **+2,000 s** e fecha em **+6,000 s**, com 0 V antes e depois.
+6. Botão cicla os modos, e o LED verde acompanha.
 
-### Estado da bancada (2026-10-06)
+### Estado da bancada
 
-Gravada pela via WSL/pyocd acima (o drive do ST-LINK não monta nesta
-máquina). Confirmado pela serial:
+> **Pendente:** a placa ainda está com o firmware de 2026-10-06 (tabela
+> `b145c17c…`, laço de 6,5 s com o chirp, estímulo no PA4). O firmware atual —
+> 8 ações, laço de 7,5 s com zona morta, estímulo no **PA5** — compila e passa
+> os testes de host, mas **ainda não foi gravado**: a Nucleo saiu do USB. Grave
+> pela via WSL/pyocd antes da sessão e confira o SHA no `info`.
+
+O que a sessão de 2026-10-06 já confirmou na placa, e continua valendo
+(gravada pela via WSL/pyocd acima, porque o drive do ST-LINK não monta nesta
+máquina):
 
 ```
 board    NUCLEO-H563ZI  SYSCLK 250 MHz  clock HSE (MCO 8 MHz do ST-LINK)
 crc32    esperado cb4abf10 calculado cb4abf10  OK
 ```
 
-`sine 100` e `sweep` responderam certo (degrau avançou 10,00 → 12,59 Hz nos
-2 s esperados). **Os passos 2–4 acima (amplitude no multímetro, período no
-osciloscópio) ainda não foram feitos** — exigem instrumento físico na
-bancada. A placa ficou em `loop`, pronta para o Ensaio 3 de manhã.
+O relógio sobe em HSE (cristal do ST-LINK, não o HSI de reserva), o CRC da
+tabela gravada confere, e `sine 100` e `sweep` responderam certo (o degrau
+avançou 10,00 → 12,59 Hz nos 2 s esperados). **Os passos 2–5 acima (amplitude
+no multímetro, período e pulsos no osciloscópio) ainda não foram feitos** —
+exigem instrumento físico na bancada.
 
-Nota: o contador de `loops`/`uptime` do `status` zera a cada reset da MCU -
+Nota: o contador de `loops`/`uptime` do `status` zera a cada reset da MCU —
 reparado que um `usbipd detach`/`attach` no host chega a pulsar o reset do
 alvo pelo ST-LINK. Não é problema (a tabela na flash não muda, só reinicia o
 laço do zero), mas não estranhe o contador voltar a 0 depois de manipular o
 USB pelo WSL.
 
-**Para a sessão de amanhã (E3 — dataset × clínico × placa, osciloscópio):**
-checklist completo em [TRES_ENSAIOS_SINAL.pdf](../docs/TRES_ENSAIOS_SINAL.pdf) §E3.
+**Para a sessão E3 (dataset × clínico × placa, osciloscópio):** checklist
+completo em [TRES_ENSAIOS_SINAL.pdf](../docs/TRES_ENSAIOS_SINAL.pdf) §E3.
 Resumo do que falta montar: circuito de condicionamento
-([CIRCUITO_CONDICIONAMENTO.pdf](../docs/CIRCUITO_CONDICIONAMENTO.pdf)) entre PA4 e
-os terminais de injeção dos dois sistemas, LM358 em 5 V, osciloscópio como
-único terra da bancada (notebook na bateria, USB da placa sEMG desconectado),
-e o sync do PA5 no segundo canal do osciloscópio para disparo. Antes de
-gravar: `silence` nos dois braços de hardware por 30 s e comparar com o piso
-medido em casa (E1 passo 5) — se estiver pior, é laço de terra do
-laboratório, resolver antes de gravar.
+([CIRCUITO_CONDICIONAMENTO.pdf](../docs/CIRCUITO_CONDICIONAMENTO.pdf)) entre
+**PA5** e os terminais de injeção dos dois sistemas, LM358 em 5 V, osciloscópio
+como único terra da bancada (notebook na bateria, USB da placa sEMG
+desconectado — e **o USB de usuário da Nucleo também, por causa do SB56**), e o
+sync do PA4 no segundo canal do osciloscópio para disparo. Antes de gravar:
+`silence` nos dois braços de hardware por 30 s e comparar com o piso medido em
+casa (E1 passo 5) — se estiver pior, é laço de terra do laboratório, resolver
+antes de gravar.
+
+Com `seg all`, uma gravação contínua de ~10 min pega as 8 ações várias vezes
+(60 s por volta completa), e a contagem de pulsos de sync diz qual é qual na
+hora da análise.

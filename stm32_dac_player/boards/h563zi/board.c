@@ -1,8 +1,10 @@
 /*
  * NUCLEO-H563ZI (MB1404): STM32H563ZIT6, Cortex-M33 a 250 MHz.
  *
- *   PA4  DAC1_OUT1  estimulo         CN7 pino 17 (D24)
- *   PA5  DAC1_OUT2  sincronismo      CN7 pino 10 (D13)
+ *   PA5  DAC1_OUT2  ESTIMULO         CN7 pino 10 (Zio D13)  <- e este que se mede
+ *   PA4  DAC1_OUT1  sync             CN7 pino 17 (Zio D24)
+ *        PA4 e VBUS_SENSE nesta placa (SB56, ADC1_INP18). Serve de gatilho de
+ *        osciloscopio com o USB de usuario desconectado; abrir SB56 o libera.
  *   PB0  LD1 verde  status
  *   PG4  LD3 vermelho erro
  *   PC13 B1 USER (ativo alto)

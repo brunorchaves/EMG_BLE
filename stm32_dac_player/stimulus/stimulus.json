@@ -1,55 +1,188 @@
 {
   "table": {
-    "len": 52000,
     "fs": 8000,
-    "loop_s": 6.5,
+    "loop_s": 7.5,
     "format": "int16 Q15 little-endian",
-    "sha256": "b145c17c2bcf125bee1cda7f18b5bb8a801dec087caec36a2e58aea1dbdb2570",
-    "crc32": "0xcb4abf10"
+    "preamble_len": 16000,
+    "segment_len": 32000,
+    "tail_len": 12000,
+    "segment_count": 8,
+    "flash_bytes": 544000,
+    "sha256": "e9625fae6b306603f6e4c4097cab93c2ae003a7e6422762006ea6d9783d84094",
+    "crc32": "0x16ed33e5"
   },
-  "layout_samples": {
-    "marker": [
-      4000,
-      4240
+  "loop_layout_samples": {
+    "preamble": [
+      0,
+      16000
     ],
-    "sweep": [
-      10400,
-      14400
+    "marker": [
+      1600,
+      1840
     ],
     "segment": [
-      18400,
-      50400
+      16000,
+      48000
+    ],
+    "tail": [
+      48000,
+      60000
     ]
   },
   "marker": {
-    "at_s": 0.5,
+    "at_s": 0.2,
     "hz": 100.0,
     "cycles": 3
   },
-  "sweep": {
-    "at_s": 1.3,
-    "duration_s": 0.5,
-    "f0_hz": 20.0,
-    "f1_hz": 500.0,
-    "method": "linear"
-  },
-  "source": {
-    "dataset": "UCI EMG Physical Action Data Set (Theodoridis 2011, DOI 10.24432/C53W49)",
+  "dead_zone_s": 1.5,
+  "sync": "o canal 2 do DAC (PA5) emite (indice+1) pulsos de 10 ms no inicio de cada laco",
+  "dataset": {
+    "name": "UCI EMG Physical Action Data Set (Theodoridis 2011, DOI 10.24432/C53W49)",
     "zip_sha256": "977088b740cb1063abb33efe58923e0bea6a71bdf354a8dbb13de44025f1a91f",
     "zip_sha256_expected": "977088b740cb1063abb33efe58923e0bea6a71bdf354a8dbb13de44025f1a91f",
-    "file": "EMG Physical Action Data Set\\sub4\\Aggressive\\txt\\Sidekicking.txt",
-    "subject": 4,
-    "column": 4,
-    "channel": "R-Thi",
-    "start_s": 4.9,
-    "duration_s": 4.0,
-    "fs_src": 1000,
-    "description": "UCI EMG Physical Action, sub4 Aggressive/Sidekicking col4 R-Thi, t=4.90..8.90 s",
-    "clip_pct": 0.15,
-    "snr_db_article_method": 10.66,
-    "bursts": 15,
-    "peak_uv": 4024.2185,
     "article_snr_db_original": 10.7
   },
-  "processing": "media removida; resample_poly 1000->8000; rampas cos de 10 ms; pico normalizado a 1,0 depois de reamostrar"
+  "processing": "media removida; resample_poly 1000->8000; rampas cos de 10 ms; pico normalizado a 1,0 depois de reamostrar",
+  "segments": [
+    {
+      "name": "Sidekicking",
+      "file": "EMG Physical Action Data Set\\sub4\\Aggressive\\txt\\Sidekicking.txt",
+      "subject": 4,
+      "group": "Aggressive",
+      "action": "Sidekicking",
+      "column": 4,
+      "channel": "R-Thi",
+      "start_s": 4.9,
+      "duration_s": 4.0,
+      "fs_src": 1000,
+      "clip_pct": 0.15,
+      "snr_db_article_method": 10.66,
+      "bursts": 15,
+      "peak_uv": 4024.2,
+      "note": "o trecho do artigo (Fig. 5); SNR 10,66 dB, o mais perto dos 10,7 dB publicados",
+      "source_str": "sub4 Aggressive/Sidekicking R-Thi t=4.90 s, SNR 10.7 dB"
+    },
+    {
+      "name": "Elbowing",
+      "file": "EMG Physical Action Data Set\\sub4\\Aggressive\\txt\\Elbowing.txt",
+      "subject": 4,
+      "group": "Aggressive",
+      "action": "Elbowing",
+      "column": 1,
+      "channel": "R-Tri",
+      "start_s": 5.5,
+      "duration_s": 4.0,
+      "fs_src": 1000,
+      "clip_pct": 0.1,
+      "snr_db_article_method": 11.08,
+      "bursts": 16,
+      "peak_uv": 4003.3,
+      "source_str": "sub4 Aggressive/Elbowing R-Tri t=5.50 s, SNR 11.1 dB"
+    },
+    {
+      "name": "Frontkicking",
+      "file": "EMG Physical Action Data Set\\sub1\\Aggressive\\txt\\Frontkicking.txt",
+      "subject": 1,
+      "group": "Aggressive",
+      "action": "Frontkicking",
+      "column": 0,
+      "channel": "R-Bic",
+      "start_s": 5.5,
+      "duration_s": 4.0,
+      "fs_src": 1000,
+      "clip_pct": 0.0,
+      "snr_db_article_method": 13.93,
+      "bursts": 10,
+      "peak_uv": 3910.7,
+      "source_str": "sub1 Aggressive/Frontkicking R-Bic t=5.50 s, SNR 13.9 dB"
+    },
+    {
+      "name": "Slapping",
+      "file": "EMG Physical Action Data Set\\sub1\\Aggressive\\txt\\Slapping.txt",
+      "subject": 1,
+      "group": "Aggressive",
+      "action": "Slapping",
+      "column": 3,
+      "channel": "L-Tri",
+      "start_s": 5.0,
+      "duration_s": 4.0,
+      "fs_src": 1000,
+      "clip_pct": 0.0,
+      "snr_db_article_method": 14.48,
+      "bursts": 10,
+      "peak_uv": 2598.4,
+      "source_str": "sub1 Aggressive/Slapping L-Tri t=5.00 s, SNR 14.5 dB"
+    },
+    {
+      "name": "Walking",
+      "file": "EMG Physical Action Data Set\\sub4\\Normal\\txt\\Walking.txt",
+      "subject": 4,
+      "group": "Normal",
+      "action": "Walking",
+      "column": 0,
+      "channel": "R-Bic",
+      "start_s": 1.5,
+      "duration_s": 4.0,
+      "fs_src": 1000,
+      "clip_pct": 0.0,
+      "snr_db_article_method": 12.06,
+      "bursts": 10,
+      "peak_uv": 656.7,
+      "source_str": "sub4 Normal/Walking R-Bic t=1.50 s, SNR 12.1 dB"
+    },
+    {
+      "name": "Handshaking",
+      "file": "EMG Physical Action Data Set\\sub4\\Normal\\txt\\Handshaking.txt",
+      "subject": 4,
+      "group": "Normal",
+      "action": "Handshaking",
+      "column": 5,
+      "channel": "R-Ham",
+      "start_s": 0.75,
+      "duration_s": 4.0,
+      "fs_src": 1000,
+      "clip_pct": 0.0,
+      "snr_db_article_method": 21.12,
+      "bursts": 9,
+      "peak_uv": 1028.9,
+      "note": "o de maior SNR do dataset (21,1 dB)",
+      "source_str": "sub4 Normal/Handshaking R-Ham t=0.75 s, SNR 21.1 dB"
+    },
+    {
+      "name": "Clapping",
+      "file": "EMG Physical Action Data Set\\sub4\\Normal\\txt\\Clapping.txt",
+      "subject": 4,
+      "group": "Normal",
+      "action": "Clapping",
+      "column": 0,
+      "channel": "R-Bic",
+      "start_s": 1.5,
+      "duration_s": 4.0,
+      "fs_src": 1000,
+      "clip_pct": 0.0,
+      "snr_db_article_method": 14.89,
+      "bursts": 12,
+      "peak_uv": 2744.8,
+      "source_str": "sub4 Normal/Clapping R-Bic t=1.50 s, SNR 14.9 dB"
+    },
+    {
+      "name": "Standing",
+      "file": "EMG Physical Action Data Set\\sub4\\Normal\\txt\\Standing.txt",
+      "subject": 4,
+      "group": "Normal",
+      "action": "Standing",
+      "column": 1,
+      "channel": "R-Tri",
+      "start_s": 0.25,
+      "duration_s": 4.0,
+      "fs_src": 1000,
+      "clip_pct": 0.0,
+      "snr_db_article_method": 7.62,
+      "bursts": 13,
+      "peak_uv": 170.6,
+      "note": "SNR 7,6 dB - o caso dificil, para ver o piso de ruido dos dois sistemas",
+      "source_str": "sub4 Normal/Standing R-Tri t=0.25 s, SNR 7.6 dB"
+    }
+  ],
+  "spec": "stimulus\\segments.json"
 }

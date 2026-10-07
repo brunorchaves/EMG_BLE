@@ -2,11 +2,17 @@
  * Interface entre o nucleo portavel (player, CLI) e cada placa Nucleo.
  *
  * Cada boards/<placa>/board.c implementa estas funcoes com acesso direto a
- * registrador. O DAC roda em modo dual: canal 1 (PA4) e o estimulo, canal 2
- * (PA5) e o sincronismo, e os dois saem da mesma palavra de 32 bits do DMA,
- * disparados pelo mesmo TRGO do TIM6. Por isso o pulso de sincronismo cai na
- * amostra exata do inicio do laco, e nao 0..32 ms depois como seria com um
- * GPIO acionado na interrupcao.
+ * registrador. O DAC roda em modo dual: os dois canais saem da mesma palavra
+ * de 32 bits do DMA, disparados pelo mesmo TRGO do TIM6. Por isso o pulso de
+ * sincronismo cai na amostra exata do inicio do laco, e nao 0..32 ms depois
+ * como seria com um GPIO acionado na interrupcao.
+ *
+ * O ESTIMULO sai no canal 2 = PA5, nao no canal 1. Na NUCLEO-H563ZI o PA4
+ * (canal 1) esta amarrado ao VBUS_SENSE pela ponte de solda SB56 - o proprio
+ * suporte de placa do Zephyr usa dac1_out2_pa5 por esse motivo. Sobrou para o
+ * canal 1 / PA4 o pulso de sync, que e so gatilho de osciloscopio e aguenta a
+ * carga do divisor (valido enquanto o USB de usuario ficar desconectado; a
+ * bancada do ensaio ja exige isso). Abrir SB56 libera o PA4 por completo.
  */
 #ifndef BOARD_H
 #define BOARD_H
@@ -20,8 +26,9 @@
 /* Meia janela do pingue-pongue, em amostras. 256 amostras = 32 ms a 8 kS/s. */
 #define BOARD_DAC_HALF_LEN   256u
 
-/* Palavra do DMA: bits 11:0 = canal 1 (estimulo), bits 27:16 = canal 2 (sync) */
-#define BOARD_DAC_WORD(ch1, ch2) ((uint32_t)(ch1) | ((uint32_t)(ch2) << 16))
+/* Palavra do DMA = DHR12RD: bits 11:0 vao para o canal 1 (PA4, sync) e
+ * bits 27:16 para o canal 2 (PA5, estimulo). */
+#define BOARD_DAC_WORD(stim, sync) ((uint32_t)(sync) | ((uint32_t)(stim) << 16))
 
 typedef enum {
     BOARD_LED_STATUS = 0, /* verde (LD1, PB0) */

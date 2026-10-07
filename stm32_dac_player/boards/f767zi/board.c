@@ -1,8 +1,10 @@
 /*
  * NUCLEO-F767ZI (MB1137): STM32F767ZIT6, Cortex-M7 a 216 MHz.
  *
- *   PA4  DAC_OUT1  estimulo          CN7 pino 17 (D24)
- *   PA5  DAC_OUT2  sincronismo       CN7 pino 10 (D13)
+ *   PA5  DAC_OUT2  ESTIMULO          CN7 pino 10 (Zio D13)  <- e este que se mede
+ *   PA4  DAC_OUT1  sync              CN7 pino 17 (Zio D24)
+ *        Mesma divisao de papeis da H563ZI, para o mesmo cabo servir nas duas.
+ *        Conferir no UM1974 se o PA4 desta placa tambem tem funcao fixa.
  *   PB0  LD1 verde  status
  *   PB14 LD3 vermelho erro
  *   PC13 B1 USER (ativo alto)

@@ -1,0 +1,67 @@
+{
+  "_comment": [
+    "Os trechos do dataset que entram na tabela de estimulo, em ordem. Lido por",
+    "tools/make_stimulus.py. Editar aqui e regerar a tabela - nao editar",
+    "common/stimulus_table.c a mao.",
+    "",
+    "A escolha veio de tools/pick_segment.py --all-actions, que varre as 80",
+    "gravacoes (4 sujeitos x 20 acoes x 8 canais) e ranqueia as janelas de 4 s por",
+    "ceifamento e por SNR pelo metodo do artigo. O sub2 fica fora: a UCI marca que",
+    "ele nao foi filtrado. Punching nao entrou porque a janela mais limpa dele tem",
+    "0,60 % de amostras ceifadas, acima do limite de 0,5 %.",
+    "",
+    "O conjunto cobre de proposito a faixa dinamica que o artigo nao testou: ele usou",
+    "so um movimento agressivo (Sidekicking, SNR 10,7 dB). Aqui vao 4 agressivos e 4",
+    "normais, de 7,6 dB (Standing - sinal fraco, caso dificil para o piso de ruido) a",
+    "21,1 dB (Handshaking).",
+    "",
+    "O indice importa: o segmento 0 e identificado por 1 pulso de sync, o 1 por 2",
+    "pulsos, e assim por diante. Sidekicking fica no 0 para a gravacao dele sair",
+    "identica a do ensaio de ontem (1 pulso de 10 ms)."
+  ],
+  "segments": [
+    {
+      "name": "Sidekicking",
+      "subject": 4, "group": "Aggressive", "action": "Sidekicking",
+      "channel": 4, "start_s": 4.90,
+      "note": "o trecho do artigo (Fig. 5); SNR 10,66 dB, o mais perto dos 10,7 dB publicados"
+    },
+    {
+      "name": "Elbowing",
+      "subject": 4, "group": "Aggressive", "action": "Elbowing",
+      "channel": 1, "start_s": 5.50
+    },
+    {
+      "name": "Frontkicking",
+      "subject": 1, "group": "Aggressive", "action": "Frontkicking",
+      "channel": 0, "start_s": 5.50
+    },
+    {
+      "name": "Slapping",
+      "subject": 1, "group": "Aggressive", "action": "Slapping",
+      "channel": 3, "start_s": 5.00
+    },
+    {
+      "name": "Walking",
+      "subject": 4, "group": "Normal", "action": "Walking",
+      "channel": 0, "start_s": 1.50
+    },
+    {
+      "name": "Handshaking",
+      "subject": 4, "group": "Normal", "action": "Handshaking",
+      "channel": 5, "start_s": 0.75,
+      "note": "o de maior SNR do dataset (21,1 dB)"
+    },
+    {
+      "name": "Clapping",
+      "subject": 4, "group": "Normal", "action": "Clapping",
+      "channel": 0, "start_s": 1.50
+    },
+    {
+      "name": "Standing",
+      "subject": 4, "group": "Normal", "action": "Standing",
+      "channel": 1, "start_s": 0.25,
+      "note": "SNR 7,6 dB - o caso dificil, para ver o piso de ruido dos dois sistemas"
+    }
+  ]
+}

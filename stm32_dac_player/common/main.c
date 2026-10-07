@@ -16,13 +16,26 @@
 
 uint32_t app_table_crc32;
 
-/* CRC-32 IEEE (o mesmo do zlib.crc32 do make_stimulus.py), sobre os bytes da tabela. */
-static uint32_t crc32_bytes(const uint8_t *p, size_t n)
+/* CRC-32 IEEE (o mesmo do zlib.crc32 do make_stimulus.py), acumulavel. */
+static uint32_t crc32_update(uint32_t crc, const uint8_t *p, size_t n)
 {
-    uint32_t crc = 0xFFFFFFFFu;
     while (n--) {
         crc ^= *p++;
         for (int k = 0; k < 8; k++) crc = (crc >> 1) ^ (0xEDB88320u & (0u - (crc & 1u)));
+    }
+    return crc;
+}
+
+/* A sequencia que o make_stimulus.py hasheia: preambulo seguido dos
+ * segmentos em ordem de indice. */
+static uint32_t stimulus_crc32(void)
+{
+    uint32_t crc = 0xFFFFFFFFu;
+    crc = crc32_update(crc, (const uint8_t *)stimulus_preamble,
+                       sizeof(int16_t) * STIMULUS_PREAMBLE_LEN);
+    for (uint32_t i = 0; i < STIMULUS_SEGMENT_COUNT; i++) {
+        crc = crc32_update(crc, (const uint8_t *)stimulus_segments[i],
+                           sizeof(int16_t) * STIMULUS_SEGMENT_LEN);
     }
     return ~crc;
 }
@@ -92,7 +105,11 @@ static void poll_events(void)
             cli_putfix(player_sweep_freq(e.sweep_step), 2);
             cli_puts(" Hz\n> ");
         } else {
-            cli_puts("loop start, completos=");
+            cli_puts("loop start seg ");
+            cli_putu(e.segment);
+            cli_puts(" ");
+            cli_puts(stimulus_segment_names[e.segment]);
+            cli_puts(", completos=");
             cli_putu(e.loops);
             cli_puts("\n> ");
         }
@@ -106,7 +123,7 @@ static void poll_events(void)
 int main(void)
 {
     board_init();
-    app_table_crc32 = crc32_bytes((const uint8_t *)stimulus_table, sizeof(int16_t) * STIMULUS_LEN);
+    app_table_crc32 = stimulus_crc32();
 
     player_init();
     cli_init();

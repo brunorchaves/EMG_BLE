@@ -91,17 +91,27 @@ void cli_print_info(void)
     cli_puts(" MHz  clock ");
     cli_puts(bi->hse_ok ? "HSE (MCO 8 MHz do ST-LINK)\n"
                         : "HSI (!! HSE falhou: base de tempo +-1%, nao use para ensaio)\n");
-    cli_puts("dac      PA4 = estimulo, PA5 = sync (10 ms no inicio de cada laco/degrau), ");
+    cli_puts("dac      PA5 = ESTIMULO (Zio D13), PA4 = sync, ");
     cli_putu(BOARD_DAC_FS_HZ);
     cli_puts(" S/s\n");
-    cli_puts("table    ");
-    cli_putu(STIMULUS_LEN);
-    cli_puts(" amostras = ");
-    cli_putfix((float)STIMULUS_LEN / (float)STIMULUS_FS, 3);
+    cli_puts("         PA4 e VBUS_SENSE nesta placa (SB56) - so gatilho, nao meca nele\n");
+    cli_puts("sync     (segmento+1) pulsos de 10 ms no inicio de cada laco\n");
+    cli_puts("table    laco de ");
+    cli_putfix((float)STIMULUS_LOOP_LEN / (float)STIMULUS_FS, 3);
     cli_puts(" s @ ");
     cli_putu(STIMULUS_FS);
-    cli_puts(" S/s\n");
-    put_kv("source   ", STIMULUS_SOURCE "\n");
+    cli_puts(" S/s = preambulo ");
+    cli_putu(STIMULUS_PREAMBLE_LEN);
+    cli_puts(" + segmento ");
+    cli_putu(STIMULUS_SEGMENT_LEN);
+    cli_puts(" + cauda ");
+    cli_putu(STIMULUS_TAIL_LEN);
+    cli_puts("\n");
+    cli_puts("flash    ");
+    cli_putu(2u * (STIMULUS_PREAMBLE_LEN + STIMULUS_SEGMENT_COUNT * STIMULUS_SEGMENT_LEN) / 1024u);
+    cli_puts(" kB de tabela em ");
+    cli_putu(STIMULUS_SEGMENT_COUNT);
+    cli_puts(" segmentos (seg lista)\n");
     put_kv("sha256   ", STIMULUS_SHA256 "\n");
     cli_puts("crc32    esperado ");
     cli_puthex(STIMULUS_CRC32, 8);
@@ -117,6 +127,13 @@ void cli_print_status(void)
     player_events_t e = player_events();
     cli_puts("mode ");
     cli_puts(player_mode_name(c.mode));
+    if (c.mode == PLAYER_LOOP || c.mode == PLAYER_ONCE) {
+        cli_puts("  seg ");
+        cli_putu(e.segment);
+        cli_puts(" ");
+        cli_puts(stimulus_segment_names[e.segment]);
+        if (c.cycle) cli_puts(" (cycle)");
+    }
     if (c.mode == PLAYER_SINE) {
         cli_puts(" ");
         cli_putfix(c.sine_hz, 2);
@@ -163,9 +180,37 @@ static void print_help(void)
         "amp <n>mv        ... em mV de pico na saida do DAC (ex.: amp 1400mv)\n"
         "amp <n>db        ... em dBFS, 0 dB = 2047 codigos (ex.: amp -20db)\n"
         "mid <0-4095>     codigo do centro (padrao 2048)\n"
-        "status           modo, amplitude, lacos tocados\n"
+        "seg              lista os segmentos do dataset\n"
+        "seg <n|nome>     escolhe o segmento (ex.: seg 4, seg Walking)\n"
+        "seg all          cicla por todos, um por laco\n"
+        "status           modo, segmento, amplitude, lacos tocados\n"
         "info             placa, relogio, tabela, SHA-256 e CRC\n"
         "events on|off    imprime cada inicio de laco / degrau\n");
+}
+
+/* Imprime s e completa com espacos ate width colunas. */
+static void put_padded(const char *s, uint32_t width)
+{
+    uint32_t k = 0;
+    for (; s[k]; k++) board_uart_putc(s[k]);
+    for (; k < width; k++) board_uart_putc(' ');
+}
+
+static void print_segments(void)
+{
+    player_events_t e = player_events();
+    player_cfg_t c = player_config();
+    for (uint32_t i = 0; i < STIMULUS_SEGMENT_COUNT; i++) {
+        cli_puts(i == e.segment ? " *" : "  ");
+        cli_putu(i);
+        cli_puts("  ");
+        put_padded(stimulus_segment_names[i], 14);
+        cli_puts(stimulus_segment_source[i]);
+        cli_puts("\n");
+    }
+    cli_puts("(* = tocando agora");
+    if (c.cycle) cli_puts(", ciclando por todos");
+    cli_puts(")  sync: indice+1 pulsos de 10 ms\n");
 }
 
 /* ---- comandos ---------------------------------------------------------- */
@@ -233,6 +278,28 @@ static void exec(char *s)
         else { err("use: events on|off"); return; }
         cli_puts(events_on ? "events on\n" : "events off\n");
         return;
+    } else if (!strcmp(cmd, "seg")) {
+        if (argc == 1) {
+            print_segments();
+            return;
+        }
+        if (!strcmp(argv[1], "all")) {
+            c.cycle = true;
+        } else {
+            int found = player_segment_by_name(argv[1]);
+            if (found < 0) {
+                if (!parse_uint(argv[1], STIMULUS_SEGMENT_COUNT - 1u, &v)) {
+                    err("use: seg | seg <n|nome> | seg all   (seg lista os nomes)");
+                    return;
+                }
+                found = (int)v;
+            }
+            c.segment = (uint8_t)found;
+            c.cycle = false;
+        }
+        /* escolher segmento so faz sentido tocando o laco */
+        if (c.mode != PLAYER_LOOP && c.mode != PLAYER_ONCE) c.mode = PLAYER_LOOP;
+        player_request(&c, true);
     } else if (!strcmp(cmd, "loop")) {
         c.mode = PLAYER_LOOP;
         player_request(&c, true);
