@@ -107,6 +107,78 @@ def repl(ser: serial.Serial) -> None:
             print(out)
 
 
+def walk(ser: serial.Serial, log_path: str | None, segments: list[str] | None) -> None:
+    """Passa pelas acoes uma por uma, disparando 'once' (um laco de 7,5 s) a
+    cada Enter, e registra o horario de cada disparo - e o que casa a captura do
+    osciloscopio com a acao no caderno de bancada.
+
+    Arme o osciloscopio em single-shot na borda de subida do sync antes de cada
+    Enter. A amostra abre 2,000 s depois do 1o pulso e fecha em 6,000 s."""
+    listing = clean(send(ser, "seg", 0.8), "seg")
+    names = [l.split()[1] for l in listing.splitlines() if l[:1] in (" ", "*") and len(l.split()) > 1
+             and l.split()[0].lstrip("*").isdigit()]
+    if not names:
+        sys.exit("nao consegui ler a lista de segmentos da placa; rode 'seg' e confira")
+
+    # (indice do segmento, nome). O indice vem da lista da placa e e o que define
+    # a contagem de pulsos do sync - nao e a posicao no roteiro, que --only muda.
+    plan = list(enumerate(names))
+    if segments:
+        chosen = []
+        for s in segments:
+            hit = next(((i, n) for i, n in plan if n.lower() == s.lower()), None)
+            if hit is None and s.isdigit() and int(s) < len(plan):
+                hit = plan[int(s)]
+            if hit is None:
+                sys.exit(f"segmento desconhecido: {s}\ndisponiveis: {', '.join(names)}")
+            chosen.append(hit)
+        plan = chosen
+
+    rows = []
+    print(f"\n{len(plan)} acoes. A cada Enter dispara um laco de 7,5 s e para em silencio.")
+    print("Arme o osciloscopio em single-shot no sync antes de cada Enter.")
+    print("Enter = dispara, 's' = pula, 'r' = repete a anterior, 'q' = encerra.\n")
+    k = 0
+    while k < len(plan):
+        seg_idx, name = plan[k]
+        pulses = seg_idx + 1
+        try:
+            key = input(f"[{k + 1}/{len(plan)}] seg {seg_idx} {name}  "
+                        f"(sync = {pulses} pulso{'s' if pulses > 1 else ''})  Enter> ").strip().lower()
+        except (EOFError, KeyboardInterrupt):
+            print()
+            break
+        if key == "q":
+            break
+        if key == "s":
+            print("   pulado")
+            k += 1
+            continue
+        if key == "r" and k > 0:
+            k -= 1
+            continue
+        send(ser, f"seg {name}", 0.5)
+        t = time.time()
+        out = clean(send(ser, "once", 0.4), "once")
+        stamp = time.strftime("%H:%M:%S", time.localtime(t))
+        # a linha de status e longa; aqui basta confirmar o modo e a acao
+        confirm = out.splitlines()[-1].split("  amp")[0].strip() if out else "?"
+        print(f"   {stamp}  disparado  [{confirm}]")
+        rows.append({"seg": seg_idx, "acao": name, "sync_pulsos": pulses,
+                     "hora": stamp, "epoch": f"{t:.3f}"})
+        k += 1
+
+    if rows and log_path:
+        import csv
+        with open(log_path, "w", newline="", encoding="utf-8") as f:
+            w = csv.DictWriter(f, fieldnames=list(rows[0].keys()))
+            w.writeheader()
+            w.writerows(rows)
+        print(f"\n{len(rows)} disparos registrados em {log_path}")
+    elif rows:
+        print(f"\n{len(rows)} disparos (use --log para gravar num CSV)")
+
+
 def linearity(ser: serial.Serial, freq: float, dwell: float) -> None:
     import numpy as np
 
@@ -123,6 +195,11 @@ def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("commands", nargs="*", help="comandos a mandar; sem nenhum, abre o terminal interativo")
     ap.add_argument("--port", help="COM15, /dev/ttyACM0, ...")
+    ap.add_argument("--walk", action="store_true",
+                    help="passa pelas acoes uma por uma, um 'once' por Enter, registrando o horario")
+    ap.add_argument("--only", nargs="*", metavar="ACAO",
+                    help="com --walk: so estas acoes, nesta ordem (nome ou indice)")
+    ap.add_argument("--log", metavar="CSV", help="com --walk: grava os disparos num CSV")
     ap.add_argument("--linearity", action="store_true")
     ap.add_argument("--dwell", type=float, default=10.0)
     ap.add_argument("--freq", type=float, default=100.0)
@@ -135,7 +212,9 @@ def main() -> None:
         sys.exit(f"nao consegui abrir {port}: {e}\n"
                  "  outro terminal (screen, PuTTY) esta com a porta aberta?")
     with ser:
-        if args.linearity:
+        if args.walk:
+            walk(ser, args.log, args.only)
+        elif args.linearity:
             linearity(ser, args.freq, args.dwell)
         elif args.commands:
             for cmd in args.commands:
