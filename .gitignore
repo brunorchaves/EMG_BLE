@@ -26,3 +26,9 @@ Notificacao-de-Invencao-UFMG*.docx
 # Export do ensaio: os CSV decimados e metadados sao pequenos e versionaveis,
 # mas o .npy de resolucao cheia (100 kS/s) chega a dezenas de MB
 power_profiling/runs/**/export/*_full_uA.npy
+
+# Player de estimulo STM32 (stm32_dac_player/): build do CMake, e o dataset da
+# UCI baixado por tools/fetch_dataset.py (18 MB; o SHA-256 do zip fica no script)
+stm32_dac_player/build/
+stm32_dac_player/dist/
+data/uci_emg_physical_action/

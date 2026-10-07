@@ -1,0 +1,19 @@
+{
+  "version": 3,
+  "configurePresets": [
+    {
+      "name": "base",
+      "hidden": true,
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/build/${presetName}",
+      "toolchainFile": "${sourceDir}/cmake/arm-none-eabi.cmake",
+      "cacheVariables": { "CMAKE_BUILD_TYPE": "RelWithDebInfo" }
+    },
+    { "name": "h563zi", "inherits": "base", "displayName": "NUCLEO-H563ZI", "cacheVariables": { "BOARD": "h563zi" } },
+    { "name": "f767zi", "inherits": "base", "displayName": "NUCLEO-F767ZI", "cacheVariables": { "BOARD": "f767zi" } }
+  ],
+  "buildPresets": [
+    { "name": "h563zi", "configurePreset": "h563zi" },
+    { "name": "f767zi", "configurePreset": "f767zi" }
+  ]
+}

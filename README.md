@@ -796,6 +796,12 @@ conversoes do ADC nao lidas: 0 (0.0% perdidas)
 - [A Low-Power Bluetooth LE Surface EMG Sensor](663744.pdf) — artigo do projeto
 - [Esquemático EMG v2.0](Schematic_EMG-schematic-v2.0_2025-02-19.pdf) — circuito do sensor
 - [Protocolo Experimental sEMG + Supercapacitor](Protocolo_Experimental_sEMG_Supercapacitor.pdf) — 8 ensaios de caracterização e validação
+- [Esquemático sEMG versão final](sEMG_Shematic_versao_final.PDF) — placa com supercapacitor (BQ25173 + TPS63031)
+- [Ensaios do artigo anterior e o que refazer](ENSAIOS_ARTIGO_2.md) — o que sustentou o SEB 2025, o que os dados antigos não sustentam, e o plano de ensaios para o artigo 2 ([PDF, 13 pp.](ENSAIOS_ARTIGO_2.pdf))
+- [Bancada dos ensaios sEMG](BANCADA_ENSAIOS.pdf) — manual de bancada: passo a passo de cada ensaio, projeto do circuito de condicionamento com esquemático, e lista de compras (19 pp.; fonte em [`BANCADA_ENSAIOS.html`](BANCADA_ENSAIOS.html))
+- [Três ensaios de qualidade de sinal](TRES_ENSAIOS_SINAL.pdf) — **o escopo enxuto**: só a comparação dataset × clínico × nossa placa, com o circuito de condicionamento único (11 pp.; fonte em [`TRES_ENSAIOS_SINAL.html`](TRES_ENSAIOS_SINAL.html))
+- [Circuito de condicionamento sEMG](CIRCUITO_CONDICIONAMENTO.pdf) — **especificação de montagem** para o Robert: esquemático, netlist ligação a ligação, BOM com tolerâncias e notas de layout (4 pp.; fonte em [`CIRCUITO_CONDICIONAMENTO.html`](CIRCUITO_CONDICIONAMENTO.html))
+- [Player de estímulo por DAC](stm32_dac_player/README.md) — firmware NUCLEO-H563ZI / F767ZI que toca o trecho de *sidekicking* do dataset UCI no DAC (laço de 6,5 s com marcador, varredura e CLI), e as ferramentas que escolhem o trecho e geram a tabela
 
 ### Medições de consumo
 - [Relatório de consumo (PDF)](power_profiling/relatorio_consumo.pdf) — caracterização com PPK2, 9 páginas
