@@ -14,7 +14,7 @@ SES_PROJECT_DIR="$REPO_ROOT/emg_nrf_ses/project/ble_peripheral/ble_app_blinky/pc
 SES_PROJECT_FILE="$SES_PROJECT_DIR/ble_app_blinky_pca10056_s140.emProject"
 APP_HEX_NAME="ble_app_blinky_pca10056_s140.hex"
 
-SOFTDEVICE_HEX="${SOFTDEVICE_HEX:-$REPO_ROOT/s140_nrf52_7.2.0_softdevice.hex}"
+SOFTDEVICE_HEX="${SOFTDEVICE_HEX:-$REPO_ROOT/firmware/s140_nrf52_7.2.0_softdevice.hex}"
 DEVICE="${DEVICE:-NRF52840_XXAA}"
 JLINK_IF="${JLINK_IF:-SWD}"
 JLINK_SPEED="${JLINK_SPEED:-4000}"

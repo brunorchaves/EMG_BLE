@@ -2,8 +2,8 @@
 
 Firmware para **NUCLEO-H563ZI** e **NUCLEO-F767ZI** que toca no DAC o trecho de
 *sidekicking* do dataset do artigo, para os ensaios de qualidade de sinal
-([TRES_ENSAIOS_SINAL.pdf](../TRES_ENSAIOS_SINAL.pdf) §3). A saída vai para o
-[circuito de condicionamento](../CIRCUITO_CONDICIONAMENTO.pdf) (LM358 → 1:501 → 5,59 mV pp)
+([TRES_ENSAIOS_SINAL.pdf](../docs/TRES_ENSAIOS_SINAL.pdf) §3). A saída vai para o
+[circuito de condicionamento](../docs/CIRCUITO_CONDICIONAMENTO.pdf) (LM358 → 1:501 → 5,59 mV pp)
 e de lá para a placa sEMG e para o EMG clínico.
 
 A placa **liga e já toca o laço**. A CLI pela serial do ST-LINK e o botão azul
@@ -160,7 +160,7 @@ marca como não filtrado). Os reservas estão em
 `make_stimulus.py --subject 3 --channel L-Thi --start 4.75`.
 
 Se as gravações brutas da sessão de 2025 aparecerem
-(ver [ENSAIOS_ARTIGO_2.md](../ENSAIOS_ARTIGO_2.md)), dá para reabrir esta escolha.
+(ver [ENSAIOS_ARTIGO_2.md](../docs/ENSAIOS_ARTIGO_2.md)), dá para reabrir esta escolha.
 
 ## Como funciona
 
@@ -218,9 +218,9 @@ laço do zero), mas não estranhe o contador voltar a 0 depois de manipular o
 USB pelo WSL.
 
 **Para a sessão de amanhã (E3 — dataset × clínico × placa, osciloscópio):**
-checklist completo em [TRES_ENSAIOS_SINAL.pdf](../TRES_ENSAIOS_SINAL.pdf) §E3.
+checklist completo em [TRES_ENSAIOS_SINAL.pdf](../docs/TRES_ENSAIOS_SINAL.pdf) §E3.
 Resumo do que falta montar: circuito de condicionamento
-([CIRCUITO_CONDICIONAMENTO.pdf](../CIRCUITO_CONDICIONAMENTO.pdf)) entre PA4 e
+([CIRCUITO_CONDICIONAMENTO.pdf](../docs/CIRCUITO_CONDICIONAMENTO.pdf)) entre PA4 e
 os terminais de injeção dos dois sistemas, LM358 em 5 V, osciloscópio como
 único terra da bancada (notebook na bateria, USB da placa sEMG desconectado),
 e o sync do PA5 no segundo canal do osciloscópio para disparo. Antes de

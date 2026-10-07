@@ -25,7 +25,7 @@ to a different toolchain.
 - SES project: `emg_nrf_ses/project/ble_peripheral/ble_app_blinky/pca10056/s140/ses/ble_app_blinky_pca10056_s140.emProject`
 - Configs: `Debug`, `Release`
 - Built app hex: `.../ses/Output/<Config>/Exe/ble_app_blinky_pca10056_s140.hex`
-- SoftDevice hex (repo root): `s140_nrf52_7.2.0_softdevice.hex`
+- SoftDevice hex: `firmware/s140_nrf52_7.2.0_softdevice.hex`
 - Target device: `NRF52840_XXAA`, interface `SWD`
 
 ## Scripts (`scripts/`)

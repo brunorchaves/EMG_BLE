@@ -25,7 +25,7 @@ Este repositório contém o firmware do sensor descrito no artigo:
 > Laboratório de Engenharia Biomédica (LEB), Universidade Federal de Minas Gerais (UFMG), Belo Horizonte, Brasil
 > **XVI Simpósio de Engenharia Biomédica (SEB 2025)** — Universidade Federal de Uberlândia (UFU)
 > Apresentação oral em 16/09/2025 · Anais com ISSN 2358-3568
-> 📎 [Artigo completo (PDF)](663744.pdf) · 🔗 [Site do evento](https://seb2025.sciencesconf.org/)
+> 📎 [Artigo completo (PDF)](docs/663744.pdf) · 🔗 [Site do evento](https://seb2025.sciencesconf.org/)
 
 **ORCID dos autores**
 
@@ -366,7 +366,7 @@ Packet overhead: 3 bytes (ATT header)
   [license.segger.com/Nordic.cgi](https://license.segger.com/Nordic.cgi) e
   instalável pela CLI: `emLicense.exe install '<chave>'`
 - **nRF5 SDK** 17.1.0 (incluído em `emg_nrf_ses/`)
-- **SoftDevice** S140 **v7.2.0** (`s140_nrf52_7.2.0_softdevice.hex` na raiz)
+- **SoftDevice** S140 **v7.2.0** (`firmware/s140_nrf52_7.2.0_softdevice.hex`)
 - **J-Link Software** — o driver USB do probe é instalado separadamente por
   `<install>/USBDriver/InstDrivers.exe`, que exige privilégio de administrador
 
@@ -793,14 +793,14 @@ conversoes do ADC nao lidas: 0 (0.0% perdidas)
 ## 📚 Referências
 
 ### Artigo, protocolo e esquemáticos
-- [A Low-Power Bluetooth LE Surface EMG Sensor](663744.pdf) — artigo do projeto
-- [Esquemático EMG v2.0](Schematic_EMG-schematic-v2.0_2025-02-19.pdf) — circuito do sensor
-- [Protocolo Experimental sEMG + Supercapacitor](Protocolo_Experimental_sEMG_Supercapacitor.pdf) — 8 ensaios de caracterização e validação
-- [Esquemático sEMG versão final](sEMG_Shematic_versao_final.PDF) — placa com supercapacitor (BQ25173 + TPS63031)
-- [Ensaios do artigo anterior e o que refazer](ENSAIOS_ARTIGO_2.md) — o que sustentou o SEB 2025, o que os dados antigos não sustentam, e o plano de ensaios para o artigo 2 ([PDF, 13 pp.](ENSAIOS_ARTIGO_2.pdf))
-- [Bancada dos ensaios sEMG](BANCADA_ENSAIOS.pdf) — manual de bancada: passo a passo de cada ensaio, projeto do circuito de condicionamento com esquemático, e lista de compras (19 pp.; fonte em [`BANCADA_ENSAIOS.html`](BANCADA_ENSAIOS.html))
-- [Três ensaios de qualidade de sinal](TRES_ENSAIOS_SINAL.pdf) — **o escopo enxuto**: só a comparação dataset × clínico × nossa placa, com o circuito de condicionamento único (11 pp.; fonte em [`TRES_ENSAIOS_SINAL.html`](TRES_ENSAIOS_SINAL.html))
-- [Circuito de condicionamento sEMG](CIRCUITO_CONDICIONAMENTO.pdf) — **especificação de montagem** para o Robert: esquemático, netlist ligação a ligação, BOM com tolerâncias e notas de layout (4 pp.; fonte em [`CIRCUITO_CONDICIONAMENTO.html`](CIRCUITO_CONDICIONAMENTO.html))
+- [A Low-Power Bluetooth LE Surface EMG Sensor](docs/663744.pdf) — artigo do projeto
+- [Esquemático EMG v2.0](docs/Schematic_EMG-schematic-v2.0_2025-02-19.pdf) — circuito do sensor
+- [Protocolo Experimental sEMG + Supercapacitor](docs/Protocolo_Experimental_sEMG_Supercapacitor.pdf) — 8 ensaios de caracterização e validação
+- [Esquemático sEMG versão final](docs/sEMG_Shematic_versao_final.PDF) — placa com supercapacitor (BQ25173 + TPS63031)
+- [Ensaios do artigo anterior e o que refazer](docs/ENSAIOS_ARTIGO_2.md) — o que sustentou o SEB 2025, o que os dados antigos não sustentam, e o plano de ensaios para o artigo 2 ([PDF, 13 pp.](docs/ENSAIOS_ARTIGO_2.pdf))
+- [Bancada dos ensaios sEMG](docs/BANCADA_ENSAIOS.pdf) — manual de bancada: passo a passo de cada ensaio, projeto do circuito de condicionamento com esquemático, e lista de compras (19 pp.; fonte em [`BANCADA_ENSAIOS.html`](docs/BANCADA_ENSAIOS.html))
+- [Três ensaios de qualidade de sinal](docs/TRES_ENSAIOS_SINAL.pdf) — **o escopo enxuto**: só a comparação dataset × clínico × nossa placa, com o circuito de condicionamento único (11 pp.; fonte em [`TRES_ENSAIOS_SINAL.html`](docs/TRES_ENSAIOS_SINAL.html))
+- [Circuito de condicionamento sEMG](docs/CIRCUITO_CONDICIONAMENTO.pdf) — **especificação de montagem** para o Robert: esquemático, netlist ligação a ligação, BOM com tolerâncias e notas de layout (4 pp.; fonte em [`CIRCUITO_CONDICIONAMENTO.html`](docs/CIRCUITO_CONDICIONAMENTO.html))
 - [Player de estímulo por DAC](stm32_dac_player/README.md) — firmware NUCLEO-H563ZI / F767ZI que toca o trecho de *sidekicking* do dataset UCI no DAC (laço de 6,5 s com marcador, varredura e CLI), e as ferramentas que escolhem o trecho e geram a tabela
 
 ### Medições de consumo
