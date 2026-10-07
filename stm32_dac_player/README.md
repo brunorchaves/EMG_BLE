@@ -41,6 +41,35 @@ O `flash.ps1` compila e copia o `.bin` para o drive USB que o ST-LINK monta
 
 Para só compilar: `powershell -File stm32_dac_player\tools\build.ps1 -Board f767zi`.
 
+### Gravação via WSL (quando o drive do ST-LINK não monta)
+
+Em máquina com política corporativa de bloqueio de armazenamento removível, o
+drive USB do ST-LINK aparece no Windows mas dá "acesso negado" (confirmado
+nesta máquina) — `flash.ps1` não funciona. Alternativa sem instalar nada da
+ST, pela interface de debug (SWD) do ST-LINK via WSL:
+
+```powershell
+# uma vez: compartilha o ST-LINK com o WSL (pede UAC)
+usbipd bind --busid <busid-do-ST-LINK>      # usbipd list mostra o busid (VID 0483:374e)
+usbipd attach --wsl --busid <busid>         # sem admin; repetir depois de reboot/replug
+# ou: powershell -File stm32_dac_player\tools\wsl_attach_stlink.ps1
+```
+```bash
+# dentro do WSL (uma vez): pyocd + o pacote CMSIS do alvo
+pip3 install --user --break-system-packages pyocd
+pyocd pack install stm32h563zitx      # ou stm32f767zitx
+
+# a cada gravação
+sudo chmod 666 /dev/bus/usb/001/00X   # ache o numero com `lsusb` (STMicroelectronics STLINK-V3); so dura até replugar
+pyocd flash -t stm32h563zitx build/h563zi/stm32_dac_player_h563zi.bin --base-address 0x08000000
+pyocd reset -t stm32h563zitx
+```
+
+A serial também passa para o WSL (`/dev/ttyACM0`), com o mesmo `chmod 666` ou
+`sudo` se o usuário não estiver no grupo `dialout`. `usbipd bind` fica
+persistido; só o `attach` precisa ser refeito depois de um reboot, sleep ou
+desconectar o cabo (sem UAC).
+
 **Pré-requisitos** (uma vez só):
 - [Arm GNU Toolchain](https://developer.arm.com/downloads/-/arm-gnu-toolchain-downloads) 14.x para mingw-w64, extraída em `%USERPROFILE%\tools\arm-gnu-toolchain\`. Outro lugar funciona com `ARM_TOOLCHAIN_DIR`.
 - `pip install --user cmake ninja`. Os scripts usam numpy, scipy, matplotlib e pyserial.
@@ -166,3 +195,30 @@ varredura, a amplitude da senoide e o parser da CLI.
 3. `sine 100`, multímetro em AC na saída do seguidor. Ajuste `amp` até ±1,400 V de pico (≈ 0,990 V RMS) e anote o código. Esperado: perto de 1738.
 4. Sync no osciloscópio: período de **6,500 s** no `loop` e de 2,000 s no `sweep`.
 5. Botão cicla os modos, e o LED verde acompanha.
+
+### Estado da bancada (2026-10-06)
+
+Gravada pela via WSL/pyocd acima (o drive do ST-LINK não monta nesta
+máquina). Confirmado pela serial:
+
+```
+board    NUCLEO-H563ZI  SYSCLK 250 MHz  clock HSE (MCO 8 MHz do ST-LINK)
+crc32    esperado cb4abf10 calculado cb4abf10  OK
+```
+
+`sine 100` e `sweep` responderam certo (degrau avançou 10,00 → 12,59 Hz nos
+2 s esperados). **Os passos 2–4 acima (amplitude no multímetro, período no
+osciloscópio) ainda não foram feitos** — exigem instrumento físico na
+bancada. A placa ficou em `loop`, tocando sem parar (120 laços em 794 s de
+uptime na última checagem), pronta para o Ensaio 3 de manhã.
+
+**Para a sessão de amanhã (E3 — dataset × clínico × placa, osciloscópio):**
+checklist completo em [TRES_ENSAIOS_SINAL.pdf](../TRES_ENSAIOS_SINAL.pdf) §E3.
+Resumo do que falta montar: circuito de condicionamento
+([CIRCUITO_CONDICIONAMENTO.pdf](../CIRCUITO_CONDICIONAMENTO.pdf)) entre PA4 e
+os terminais de injeção dos dois sistemas, LM358 em 5 V, osciloscópio como
+único terra da bancada (notebook na bateria, USB da placa sEMG desconectado),
+e o sync do PA5 no segundo canal do osciloscópio para disparo. Antes de
+gravar: `silence` nos dois braços de hardware por 30 s e comparar com o piso
+medido em casa (E1 passo 5) — se estiver pior, é laço de terra do
+laboratório, resolver antes de gravar.

@@ -27,12 +27,23 @@ if ($Programmer) {
 $label = "^NODE?_" + $Board.ToUpper() + "$"
 $vol = Get-Volume | Where-Object { $_.FileSystemLabel -match $label -and $_.DriveLetter } | Select-Object -First 1
 if (-not $vol) {
+    $blocked = Get-Volume | Where-Object { $_.DriveType -eq "Removable" -and -not $_.FileSystemLabel }
+    if ($blocked) {
+        throw ("drive do ST-LINK sem rotulo/sistema de arquivos (provavel bloqueio de politica de " +
+               "armazenamento removivel - acesso negado mesmo ao Get-ChildItem). Use a gravacao via WSL " +
+               "(README.md, secao 'Gravacao via WSL') em vez deste script.")
+    }
     throw "drive do ST-LINK ($label) nao encontrado - a Nucleo esta no USB do ST-LINK (CN1)?"
 }
 $drive = "$($vol.DriveLetter):\"
 Write-Host "gravando $bin -> $drive"
-Remove-Item (Join-Path $drive "FAIL.TXT") -ErrorAction SilentlyContinue
-Copy-Item $bin $drive
+try {
+    Remove-Item (Join-Path $drive "FAIL.TXT") -ErrorAction SilentlyContinue
+    Copy-Item $bin $drive -ErrorAction Stop
+} catch {
+    throw ("acesso negado ao copiar para $drive - provavel bloqueio de politica de armazenamento removivel. " +
+           "Use a gravacao via WSL (README.md, secao 'Gravacao via WSL'). Erro original: $_")
+}
 
 # o ST-LINK grava, desmonta e remonta o drive; FAIL.TXT aparece se der errado
 $deadline = (Get-Date).AddSeconds(30)
