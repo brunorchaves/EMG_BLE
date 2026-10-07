@@ -95,9 +95,38 @@ desconectar o cabo (sem UAC).
 - [Arm GNU Toolchain](https://developer.arm.com/downloads/-/arm-gnu-toolchain-downloads) 14.x para mingw-w64, extraída em `%USERPROFILE%\tools\arm-gnu-toolchain\`. Outro lugar funciona com `ARM_TOOLCHAIN_DIR`.
 - `pip install --user cmake ninja`. Os scripts usam numpy, scipy, matplotlib e pyserial.
 
+## Como abrir a CLI
+
+Serial: porta do ST-LINK, 115200 8N1. **Atenção:** se o ST-LINK estiver anexado
+ao WSL por `usbipd`, a porta COM **não existe no Windows** — e vice-versa. Abra o
+terminal do mesmo lado onde o dispositivo está.
+
+**Pelo WSL** (é o caminho desta máquina, porque a gravação também é por lá):
+
+```bash
+cd /mnt/c/Users/RIBB/Documents/github/EMG_BLE/stm32_dac_player
+python3 tools/player_cli.py            # terminal interativo
+```
+
+Abre um prompt `player>`: digite os comandos do firmware, `?` para os atalhos
+do script, `quit` para sair (sair não mexe no que a placa está tocando).
+Alternativa sem o script: `screen /dev/ttyACM0 115200` (sair: `Ctrl+A` depois `K`, `y`).
+
+Para script e caderno de bancada, dá para mandar de uma vez:
+
+```bash
+python3 tools/player_cli.py info
+python3 tools/player_cli.py "seg Walking" status
+python3 tools/player_cli.py --linearity --dwell 10    # E1 passo 4
+```
+
+**Pelo Windows**, primeiro devolva o dispositivo (`usbipd detach --busid <id>`),
+aí a COM reaparece e vale `python tools\player_cli.py` ou PuTTY em 115200 8N1.
+Para gravar de novo pelo WSL, reanexe.
+
 ## Modos e comandos
 
-Serial: porta do ST-LINK, 115200 8N1. `help` lista tudo.
+`help` lista tudo dentro do firmware.
 
 | Comando | O que faz | Uso no ensaio |
 |---|---|---|
