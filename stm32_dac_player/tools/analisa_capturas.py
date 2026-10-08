@@ -282,7 +282,12 @@ def main() -> None:
           f"- capturas que atendem: **{len(nyq_ok)} de {len(ok)}**",
           f"- com {np.median(fsv):.0f} S/s o Nyquist e {np.median(fsv) / 2:.0f} Hz, e "
           f"{(EMG_BAND_HZ[1] - np.median(fsv) / 2) / (EMG_BAND_HZ[1] - EMG_BAND_HZ[0]) * 100:.0f} % "
-          "da banda cai acima dele\n",
+          "da banda cai acima dele",
+          "- **se cada arquivo tem ~2000 pontos, a taxa baixa e do SALVAMENTO, nao da "
+          "aquisicao**: 2000 e o registro de tela do InfiniiVision. Nos prints da sessao de "
+          "2026-10-07 o Agilent DSO-X 2012A estava adquirindo a 2,5 kSa/s. Ao salvar em CSV, "
+          "por o comprimento em Max dentro de Definicoes traz a memoria inteira, e o arquivo "
+          "passa a ter ~18 mil linhas para os 7,5 s do laco.\n",
           "## Periodo do laco\n"]
     md.append(f"- medido em {len(per)} captura(s) com dois marcadores: "
               f"**{np.mean(per):.4f} s** (desvio {np.std(per):.4f} s), nominal {LOOP_S:.3f} s\n"

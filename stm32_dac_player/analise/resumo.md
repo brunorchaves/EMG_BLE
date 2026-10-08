@@ -8,6 +8,7 @@
 - para a banda de 20-400 Hz o minimo teorico e 800 S/s
 - capturas que atendem: **0 de 35**
 - com 200 S/s o Nyquist e 100 Hz, e 79 % da banda cai acima dele
+- **se cada arquivo tem ~2000 pontos, a taxa baixa e do SALVAMENTO, nao da aquisicao**: 2000 e o registro de tela do InfiniiVision. Nos prints da sessao de 2026-10-07 o Agilent DSO-X 2012A estava adquirindo a 2,5 kSa/s. Ao salvar em CSV, por o comprimento em Max dentro de Definicoes traz a memoria inteira, e o arquivo passa a ter ~18 mil linhas para os 7,5 s do laco.
 
 ## Periodo do laco
 
