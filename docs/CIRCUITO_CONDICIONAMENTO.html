@@ -143,7 +143,7 @@
 <div class="wrap">
 
 <header class="masthead">
-  <p class="eyebrow">LEB · UFMG · Especificação de montagem · v1.0</p>
+  <p class="eyebrow">LEB · UFMG · Especificação de montagem · v1.2</p>
   <h1>Circuito de Condicionamento sEMG</h1>
   <p class="standfirst">Gerador de sinal de eletromiografia para os ensaios de comparação: recebe o DAC do STM32 e entrega <b>5,59 mV pico a pico</b> simultaneamente aos terminais diferenciais da placa sEMG e do EMG clínico. <b>Todos os valores são fixos.</b> Um único par de jumpers, sem ajuste e sem conta na bancada.</p>
 </header>
@@ -152,7 +152,7 @@
   <h2 class="sec"><i>1</i>Esquemático</h2>
 
   <figure>
-    <svg viewBox="0 0 760 500" role="img" aria-label="Esquemático completo: conector J1 traz o DAC do STM32 e 5 volts; R1 e C1 formam filtro RC; U1A do LM358 como seguidor; R2 de 100 kilo-ohms e R3 de 200 ohms formam o atenuador; quatro capacitores de 1 microfarad levam o sinal para PAD1, PAD2 da placa sEMG e CLIN mais e CLIN menos do clínico; abaixo, o ramo de injeção no ADC com R6, R7 e R8">
+    <svg viewBox="0 0 760 572" role="img" aria-label="Esquemático completo: conector J1 traz o DAC do STM32 e 5 volts; R1 e C1 formam filtro RC; U1A do LM358 como seguidor; C6 acopla em AC antes do divisor; R2 de 100 kilo-ohms e R3 de 200 ohms formam o atenuador, com o nó TAP centrado em zero; quatro capacitores de 1 microfarad levam o sinal para PAD1, PAD2 da placa sEMG e CLIN mais e CLIN menos do clínico; abaixo, o ramo de injeção no ADC com R6, R7 e R8, e o ponto de teste TP3 no próprio nó de injeção">
       <defs>
         <marker id="am" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
           <path d="M0,1 L9,5 L0,9 z" fill="currentColor"/>
@@ -207,7 +207,11 @@
       <text x="308" y="108" font-family="monospace" font-size="9" text-anchor="middle" fill="#1c3f6e" opacity=".8">BUF_OUT</text>
 
       <!-- R2 -->
-      <line x1="313" y1="84" x2="340" y2="84" stroke="currentColor" stroke-width="1.6"/>
+      <line x1="313" y1="84" x2="320" y2="84" stroke="currentColor" stroke-width="1.6"/>
+      <line x1="320" y1="72" x2="320" y2="96" stroke="#a85a12" stroke-width="1.8"/>
+      <line x1="328" y1="72" x2="328" y2="96" stroke="#a85a12" stroke-width="1.8"/>
+      <text x="324" y="50" font-family="monospace" font-size="10" text-anchor="middle" fill="#a85a12">C6 1µ</text>
+      <line x1="328" y1="84" x2="340" y2="84" stroke="currentColor" stroke-width="1.6"/>
       <rect x="340" y="74" width="50" height="20" fill="none" stroke="#a85a12" stroke-width="1.8"/>
       <text x="365" y="68" font-family="monospace" font-size="10" text-anchor="middle" fill="#a85a12">R2 100k 0,1%</text>
 
@@ -215,6 +219,8 @@
       <line x1="390" y1="84" x2="412" y2="84" stroke="currentColor" stroke-width="1.6"/>
       <circle cx="412" cy="84" r="3.6" fill="currentColor"/>
       <text x="424" y="112" font-family="monospace" font-size="10" text-anchor="start" fill="currentColor" opacity=".75">TAP</text>
+      <circle cx="448" cy="84" r="5" fill="none" stroke="#1c3f6e" stroke-width="1.8"/>
+      <text x="448" y="68" font-family="monospace" font-size="10" text-anchor="middle" fill="#1c3f6e" font-weight="600">TP3</text>
 
       <!-- R3 -->
       <line x1="412" y1="84" x2="412" y2="124" stroke="currentColor" stroke-width="1.6"/>
@@ -289,9 +295,19 @@
       <!-- GND para os conectores -->
       <line x1="330" y1="230" x2="330" y2="286" stroke="currentColor" stroke-width="1.6"/>
       <line x1="330" y1="286" x2="642" y2="286" stroke="currentColor" stroke-width="1.6" marker-end="url(#am)"/>
-      <text x="648" y="283" font-family="monospace" font-size="11" fill="currentColor" font-weight="600">J2-3 · J3-3  GND</text>
+      <text x="648" y="283" font-family="monospace" font-size="11" fill="currentColor" font-weight="600">J2-3  GND</text>
+      <circle cx="430" cy="286" r="3.2" fill="currentColor"/>
+      <line x1="430" y1="286" x2="430" y2="326" stroke="currentColor" stroke-width="1.6"/>
+      <line x1="430" y1="326" x2="500" y2="326" stroke="currentColor" stroke-width="1.6"/>
+      <rect x="500" y="316" width="42" height="20" fill="none" stroke="#a85a12" stroke-width="1.6"/>
+      <text x="521" y="310" font-family="monospace" font-size="10" text-anchor="middle" fill="#a85a12">R10 10k</text>
+      <text x="521" y="350" font-family="monospace" font-size="10" text-anchor="middle" fill="#a85a12">‖ JP3</text>
+      <line x1="542" y1="326" x2="642" y2="326" stroke="#a85a12" stroke-width="1.6" marker-end="url(#am)"/>
+      <text x="648" y="323" font-family="monospace" font-size="11" fill="#a85a12" font-weight="600">J3-3 REF</text>
+      <text x="648" y="337" font-family="monospace" font-size="9" fill="currentColor" opacity=".6">do clínico</text>
 
       <!-- separador -->
+      <g transform="translate(0,70)">
       <line x1="14" y1="322" x2="746" y2="322" stroke="currentColor" stroke-width="1" stroke-dasharray="5 4" opacity=".5"/>
       <text x="14" y="344" font-family="monospace" font-size="10.5" fill="#a85a12" font-weight="600">RAMO DE INJEÇÃO NO ADC — só para o ensaio 2</text>
 
@@ -341,9 +357,10 @@
       <line x1="519" y1="481" x2="537" y2="481" stroke="currentColor" stroke-width="1.8"/>
       <line x1="524" y1="486" x2="532" y2="486" stroke="currentColor" stroke-width="1.8"/>
       <text x="648" y="414" font-family="monospace" font-size="9.5" fill="currentColor" opacity=".7">p5→GND, p6=p7</text>
+      </g>
     </svg>
     <figcaption><b>Esquemático completo</b>
-      Todos os valores fixos. <code>JP1</code>/<code>JP2</code> são o único elemento ajustável: em paralelo com <code>R4</code>/<code>R5</code>, fechados no estado padrão. O <code>U1B</code> não é usado, mas <strong>tem de ser terminado</strong> (pino 5 no GND, pino 6 ligado ao 7) — amp op com entrada flutuante oscila e acopla no canal que está em uso. O ramo do ADC fica permanentemente soldado; <code>J4</code> só é conectado durante o ensaio 2.
+      Todos os valores fixos. <code>JP1</code>/<code>JP2</code> são o único elemento ajustável: em paralelo com <code>R4</code>/<code>R5</code>, fechados no estado padrão. O <code>U1B</code> não é usado, mas <strong>tem de ser terminado</strong> (pino 5 no GND, pino 6 ligado ao 7) — amp op com entrada flutuante oscila e acopla no canal que está em uso. O ramo do ADC fica permanentemente soldado; <code>J4</code> só é conectado durante o ensaio 2. O <code>C6</code> vem <strong>antes</strong> do divisor: com ele, o <code>R2</code>+<code>R3</code> puxam o nó para 0 V de DC e o <code>TAP</code> fica <strong>centrado em zero</strong>. E o <code>TP3</code> fica no próprio <code>TAP</code> — o nó único que alimenta os quatro capacitores de acoplamento. O que se mede ali é literalmente o que vai para os dois equipamentos, centrado em zero, sem réplica e sem ramo paralelo.
     </figcaption>
   </figure>
 </section>
@@ -354,18 +371,20 @@
 
 <pre>NET  DAC_IN      J1-1 · R1-1
 NET  A           R1-2 · C1-1 · U1-3
-NET  BUF_OUT     U1-1 · U1-2 · TP1 · R2-1 · R6-1
-NET  TAP         R2-2 · R3-1 · C2-1 · C4-1
+NET  BUF_OUT     U1-1 · U1-2 · TP1 · R6-1 · C6-1
+NET  AC_IN       C6-2 · R2-1
+NET  TAP         R2-2 · R3-1 · C2-1 · C4-1 · TP3
 NET  P1          C2-2 · R4-1 · JP1-1
 NET  P2          C3-2 · R5-1 · JP2-1
 NET  PAD1        R4-2 · JP1-2 · J2-1
 NET  PAD2        R5-2 · JP2-2 · J2-2
 NET  CLIN_P      C4-2 · J3-1
 NET  CLIN_N      C5-2 · J3-2
+NET  CLIN_REF    R10-2 · JP3-2 · J3-3
 NET  ADC_IN      R6-2 · R7-2 · R8-1 · J4-1
 NET  VCC_SEMG    R7-1 · J4-2
 NET  +5V         J1-2 · U1-8 · C7-1 · C8-1
-NET  GND         J1-3 · J2-3 · J3-3 · U1-4 · U1-5 · C1-2 ·
+NET  GND         J1-3 · J2-3 · U1-4 · U1-5 · C1-2 · R10-1 · JP3-1 ·
                  R3-2 · C3-1 · C5-1 · R8-2 · C7-2 · C8-2 · TP2
 NET  U1B_FB      U1-6 · U1-7</pre>
 
@@ -377,6 +396,126 @@ NET  U1B_FB      U1-6 · U1-7</pre>
       <li><strong><code>C3-1</code> e <code>C5-1</code> vão no GND</strong>, não no <code>TAP</code>. É o lado frio das duas pernas diferenciais.</li>
     </ul>
   </div>
+
+  <h3>Por que 1 µF e não 100 nF</h3>
+  <p>Os capacitores de acoplamento formam um passa-alta com a resistência que enxergam. Do lado da nossa placa são 1,056 MΩ (56 kΩ de série mais 1 MΩ de polarização), e aí tanto faz:</p>
+  <div class="tw">
+    <table>
+      <thead><tr><th>C2–C5</th><th class="n">f<sub>c</sub> na nossa placa</th><th class="n">Perda em 20 Hz</th></tr></thead>
+      <tbody>
+        <tr><td class="v">1 µF</td><td class="n">0,15 Hz</td><td class="n">−0,002 dB</td></tr>
+        <tr><td class="v">100 nF</td><td class="n">1,51 Hz</td><td class="n">−0,025 dB</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p><strong>O lado que decide é o clínico</strong>, cuja impedância de entrada ainda não está identificada. A regra é <code>C ≥ 1/(2π · 1,5 Hz · Z_in)</code>:</p>
+  <div class="tw">
+    <table>
+      <thead><tr><th>Z<sub>in</sub> do clínico</th><th class="n">C mínimo</th></tr></thead>
+      <tbody>
+        <tr><td class="v">1 MΩ</td><td class="n">106 nF</td></tr>
+        <tr><td class="v">100 kΩ</td><td class="n">1,06 µF</td></tr>
+        <tr><td class="v">10 kΩ</td><td class="n">10,6 µF</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <div class="call grave">
+    <span class="lab">Não substituir por cerâmico</span>
+    <p>Com 100 nF o circuito só funciona se o clínico tiver entrada de 1 MΩ ou mais; com 1 µF aguenta até 100 kΩ. Enquanto o equipamento não estiver identificado, <strong>1 µF é seguro e 100 nF é aposta</strong> — a diferença de custo é de alguns reais.</p>
+    <p>E, qualquer que seja o valor, <strong>tem de ser filme (MKT/MKP)</strong>. Cerâmico classe II (X7R, Y5V) tem capacitância dependente da tensão, é microfônico e distorce entre −60 e −40 dB — exatamente na faixa que este circuito existe para medir.</p>
+  </div>
+
+  <h3>Por que o lado frio vai ao GND através de capacitor</h3>
+  <p>No esquemático, <code>C3</code> e <code>C5</code> saem do <strong>GND</strong> e vão para <code>PAD2</code> e <code>CLIN–</code>. Parece errado — e é a parte mais importante de não "corrigir" na montagem.</p>
+  <p><strong>Por que o lado frio não recebe sinal invertido.</strong> O amplificador mede a <em>diferença</em> entre as duas entradas. Para injetar 5,59 mV diferenciais não é preciso pôr +2,8 mV numa perna e −2,8 mV na outra: basta pôr os 5,59 mV numa e segurar a outra no terra de AC. O modo comum que isso gera (2,8 mV) é rejeitado pela CMRR de 110 dB do INA317, virando 0,009 µV.</p>
+  <p><strong>Por que tem capacitor e não fio direto.</strong> Ligar o lado frio em DC ao terra força o ponto de operação da entrada e briga com a polarização interna do equipamento. Na nossa placa é fatal: a entrada do INA317 cairia de 1,65 V para 1,65 × 56 k/(56 k + 1 M) ≈ <strong>87 mV</strong>, fora da faixa de modo comum, e o amplificador para de funcionar. <strong>O capacitor é o que permite apresentar “0 V de AC” sem apresentar “0 V de DC”.</strong></p>
+  <p>E o capacitor não é dispensável no outro sentido tampouco: sem <code>C3</code>/<code>C5</code> as entradas frias ficariam flutuando, captando ruído, e a medida diferencial viraria lixo.</p>
+  <h3>Nenhuma tensão do circuito fica negativa — e está certo</h3>
+  <p>A dúvida natural ao olhar o esquemático é: se o DAC só produz 0 a 3,3 V e não há trilho negativo, como o sinal chega simétrico no amplificador? A resposta é que <strong>“centrado em zero” é relativo a uma referência</strong>, e nem o INA317 nem o clínico medem em relação ao nosso terra — os dois medem a <em>diferença</em> entre os seus dois pinos.</p>
+  <p>O mesmo instante da senoide, visto em cada nó, com tudo referido ao GND do circuito:</p>
+  <div class="tw">
+    <table>
+      <thead><tr><th>Nó</th><th class="n">Pico +</th><th class="n">Pico &minus;</th><th class="n">Cruza zero?</th></tr></thead>
+      <tbody>
+        <tr><td>TP1 (saída do buffer)</td><td class="n">3,05 V</td><td class="n">0,25 V</td><td class="n">não</td></tr>
+        <tr><td>TAP (depois do divisor)</td><td class="n">6,09 mV</td><td class="n">0,50 mV</td><td class="n">não</td></tr>
+        <tr><td>PAD1 / CLIN+</td><td class="n">1,652795 V</td><td class="n">1,647205 V</td><td class="n">não</td></tr>
+        <tr><td>PAD2 / CLIN&minus;</td><td class="n">1,650000 V</td><td class="n">1,650000 V</td><td class="n">não</td></tr>
+        <tr><td><strong>PAD1 &minus; PAD2</strong><br><span style="opacity:.7">o que o amplificador mede</span></td><td class="n"><strong>+2,795 mV</strong></td><td class="n"><strong>&minus;2,795 mV</strong></td><td class="n"><strong>sim</strong></td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p class="tnote">Nenhum nó cruza zero, e a grandeza medida é simétrica em torno de zero. As duas coisas são verdade ao mesmo tempo — e é por isso que <strong>não existe trilho negativo neste circuito, nem estágio inversor</strong>. O capacitor converte “unipolar em torno de X” em “bipolar em torno do que o destino quiser”, sem fonte negativa.</p>
+
+  <div class="call grave">
+    <span class="lab">Consequência para quem for medir</span>
+    <p>Uma ponta de osciloscópio single-ended mede <strong>pino contra terra</strong>; o amplificador mede <strong>pino contra pino</strong>. A ponta no <code>PAD1</code> mostra 1,65 V com um tremor de 2,8 mV em cima, e está correta — ela só não sabe o que o <code>PAD2</code> está fazendo.</p>
+    <p>Não é preciso medir nos pads: use o <code>TP3</code>, <strong>com a ponta em acoplamento DC</strong>. Se o traço já aparecer centrado em zero, a prova é do circuito.</p>
+    <p><strong>Terra da ponta sempre no <code>TP2</code>.</strong> Nunca num pad nem no nó REF da placa — isso curto-circuita a polarização do front-end para o terra da rede elétrica através do osciloscópio.</p>
+  </div>
+
+  <div class="call info">
+    <span class="lab">CLIN– e J3-3 não são redundantes</span>
+    <p><code>CLIN–</code> é uma das duas <strong>entradas diferenciais</strong>, acoplada em AC. <code>J3-3</code> é o terminal de <strong>referência/comum</strong> do clínico, ligado em DC ao nosso terra. São pinos diferentes, com funções diferentes — o mesmo vale para <code>PAD2</code> e o GND no <code>J2-3</code>.</p>
+  </div>
+  <h3>Medir o próprio nó de injeção</h3>
+  <p>Não existe ramo de monitoração neste circuito, e isso é deliberado: um ramo paralelo mediria uma <em>réplica</em> do sinal, e se o <code>R2</code> ou o <code>R3</code> estivessem errados ele mostraria tudo perfeito. <strong>O <code>TP3</code> fica no próprio <code>TAP</code></strong> — o nó único de onde saem os quatro capacitores de acoplamento. O que se mede ali é o que vai para os dois equipamentos.</p>
+  <div class="tw">
+    <table>
+      <thead><tr><th>No TP3 / TAP</th><th class="n">Valor</th></tr></thead>
+      <tbody>
+        <tr><td>Amplitude do sinal (Vpp)</td><td class="n"><strong>5,59 mV</strong></td></tr>
+        <tr><td>Nível DC (Vmean)</td><td class="n"><strong>0 V</strong></td></tr>
+        <tr><td>Excursão</td><td class="n">&minus;2,795 a +2,795 mV</td></tr>
+        <tr><td>Impedância de fonte</td><td class="n">200 Ω</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p>O <code>C6</code> vem antes do divisor justamente para isso: o <code>R2</code>+<code>R3</code> em série puxam o lado de fora dele para 0 V de DC, então o <code>TAP</code> fica <strong>centrado em zero</strong> — e continua sendo o nó real de injeção, não uma réplica. O polo fica em 1,59 Hz (1 µF contra os 100,2 kΩ de <code>R2</code>+<code>R3</code>), o que custa &minus;0,03 dB em 20 Hz.</p>
+
+  <div class="call grave">
+    <span class="lab">Acoplamento DC, e ponta em 1×</span>
+    <p>Como o <code>TAP</code> está em 0 V de DC, mede-se <strong>com acoplamento DC</strong> em 1 mV/div e offset zero. Sem acoplamento AC, sem “roubar”: o que aparece na tela é o nó real, centrado em zero pelo <code>C6</code>.</p>
+    <p>Ponta em <strong>1×</strong>, não 10× — em 10× os 5,59 mV virariam 0,56 mV e sumiriam na escala. O carregamento é irrelevante, porque a impedância de fonte no <code>TAP</code> é de 200 Ω.</p>
+  </div>
+
+  <h4>Diagnóstico pelo TP3, acoplamento DC, 1 mV/div</h4>
+  <div class="tw">
+    <table>
+      <thead><tr><th>O que aparece na tela</th><th>Diagnóstico</th></tr></thead>
+      <tbody>
+        <tr><td>Vpp 5,59 mV, <strong>Vmean 0 V</strong></td><td><strong>correto</strong></td></tr>
+        <tr><td>Vpp certo, Vmean em 3,3 mV</td><td><code>C6</code> em curto (DC atravessando)</td></tr>
+        <tr><td>Vpp ~501× maior</td><td><code>R2</code> em curto</td></tr>
+        <tr><td>linha reta em 0 V</td><td><code>C6</code> aberto, ou <code>R3</code> em curto</td></tr>
+        <tr><td>linha reta, Vmean subindo devagar</td><td><code>C6</code> eletrolítico com fuga — troque por filme</td></tr>
+        <tr><td>senoide achatada em cima</td><td>LM358 ceifando — confira o <code>TP1</code> e baixe o DAC para ±1,20 V</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p class="tnote">Em 1 mV/div o osciloscópio está perto do próprio piso de ruído (algumas centenas de µV), então <strong>ligue média de 16 a 64 aquisições</strong> na senoide de calibração. Mesmo assim a leitura de Vpp fica em ~4 % de exatidão — ela <em>confirma</em>; a <em>calibração</em> continua sendo a razão dos resistores, em 0,14 %.</p>
+
+  <h4>A prova de que C2–C5 desacoplaram os terminais</h4>
+  <p>Essa não precisa de osciloscópio — e também não dá para “roubar”. É <strong>uma leitura de multímetro</strong>, com o simulador e a placa sEMG ligados:</p>
+  <div class="tw">
+    <table>
+      <thead><tr><th>Medir</th><th class="n">Esperado</th><th>Se der diferente</th></tr></thead>
+      <tbody>
+        <tr><td>DC no <code>PAD1</code>, placa sEMG <strong>ligada</strong></td><td class="n"><strong>1,65 V</strong></td><td><strong>~0 V → <code>C2</code> em curto</strong></td></tr>
+        <tr><td>DC no <code>PAD2</code>, placa sEMG <strong>ligada</strong></td><td class="n"><strong>1,65 V</strong></td><td>~0 V → <code>C3</code> em curto</td></tr>
+        <tr><td>DC no <code>TAP</code>, simultaneamente</td><td class="n">0 V</td><td>3,3 mV → <code>C6</code> em curto</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p class="tnote">Os pads ficam em 1,65 V enquanto o <code>TAP</code>, do outro lado do capacitor, fica em 0 V. <strong>Dois potenciais DC diferentes nos dois lados do capacitor é o desacoplamento, medido.</strong> Se o <code>C2</code> estivesse em curto, o <code>PAD1</code> seria arrastado para o <code>TAP</code> — os 200 Ω do simulador ganham com folga dos 1,056 MΩ de polarização da placa, e a leitura cairia para ~0,3 mV.</p>
+
+  <div class="call info">
+    <span class="lab">A divisão de trabalho da verificação</span>
+    <p><strong>Osciloscópio no TP3 (acoplamento DC, 1×):</strong> a parte dinâmica, medida no nó real — forma de onda, amplitude injetada, ceifamento, oscilação, e se a tabela do DAC está de fato tocando. Dá para deixar o osciloscópio nele durante a gravação inteira e ver na hora se o estímulo falhar.</p>
+    <p><strong>Multímetro:</strong> a razão de atenuação — <code>R2</code> e <code>R3</code> medidos em ohm, com o circuito desligado. Mais o DC do <code>TAP</code> (tem de dar 0 V) e o DC dos pads (tem de dar 1,65 V com a placa ligada).</p>
+    <p>Os dois juntos cobrem a cadeia inteira, e <strong>nenhum dos dois depende de um recurso do instrumento para dar o resultado certo</strong>.</p>
+  </div>
+
 </section>
 
 <section id="bom">
@@ -391,16 +530,18 @@ NET  U1B_FB      U1-6 · U1-7</pre>
         <tr><td><strong>R3</strong></td><td class="v"><strong>200 Ω</strong></td><td class="v"><strong>0,1 %</strong></td><td>filme metálico PTH</td></tr>
         <tr><td>R1</td><td class="v">1 kΩ</td><td class="v">1 %</td><td>filme metálico PTH, 1/4 W</td></tr>
         <tr><td>R4, R5</td><td class="v">10 kΩ</td><td class="v">1 %</td><td>filme metálico PTH, 1/4 W</td></tr>
+        <tr><td>R10</td><td class="v">10 kΩ</td><td class="v">1 %</td><td>filme metálico PTH — em série com a referência do clínico</td></tr>
         <tr><td>R6</td><td class="v">47 kΩ</td><td class="v">1 %</td><td>filme metálico PTH, 1/4 W</td></tr>
         <tr><td>R7, R8</td><td class="v">100 kΩ</td><td class="v">1 %</td><td>filme metálico PTH, 1/4 W</td></tr>
+        <tr><td><strong>C6</strong></td><td class="v"><strong>1 µF</strong></td><td class="v">10 %</td><td><strong>filme</strong> (MKT/MKP) 63 V — acoplamento antes do divisor. <strong>Não eletrolítico:</strong> a fuga de µA sobre 100 kΩ daria ~100 mV de offset</td></tr>
         <tr><td><strong>C2–C5</strong></td><td class="v"><strong>1 µF</strong></td><td class="v">10 %</td><td><strong>filme</strong> (MKT/MKP) 63 V, passo 5 mm — <strong>não eletrolítico</strong></td></tr>
         <tr><td>C1</td><td class="v">100 nF</td><td class="v">10 %</td><td>filme (MKT), passo 5 mm</td></tr>
         <tr><td>C7</td><td class="v">100 nF</td><td class="v">—</td><td>cerâmico, junto ao pino 8 do U1</td></tr>
         <tr><td>C8</td><td class="v">10 µF</td><td class="v">—</td><td>eletrolítico ou cerâmico</td></tr>
-        <tr><td>JP1, JP2</td><td class="v">—</td><td class="v">—</td><td>barra de 2 pinos 2,54 mm + jumper</td></tr>
+        <tr><td>JP1, JP2, JP3</td><td class="v">—</td><td class="v">—</td><td>barra de 2 pinos 2,54 mm + jumper cada. <strong>Todos fechados no estado padrão</strong></td></tr>
         <tr><td>J1, J2, J3</td><td class="v">3 pinos</td><td class="v">—</td><td>barra 2,54 mm ou terminal a parafuso</td></tr>
         <tr><td>J4</td><td class="v">2 pinos</td><td class="v">—</td><td>barra 2,54 mm</td></tr>
-        <tr><td>TP1, TP2</td><td class="v">—</td><td class="v">—</td><td>1 pino 2,54 mm cada</td></tr>
+        <tr><td>TP1, TP2, TP3</td><td class="v">—</td><td class="v">—</td><td>1 pino 2,54 mm cada</td></tr>
       </tbody>
     </table>
   </div>
@@ -416,9 +557,10 @@ NET  U1B_FB      U1-6 · U1-7</pre>
       <tbody>
         <tr><td>J1</td><td class="v">1 / 2 / 3</td><td class="v">DAC_IN / +5V / GND</td><td>placa do STM32 — DAC em PA4, e o 5 V dela</td></tr>
         <tr><td>J2</td><td class="v">1 / 2 / 3</td><td class="v">PAD1 / PAD2 / GND</td><td>placa sEMG — MP1, MP3 e um ponto de GND</td></tr>
-        <tr><td>J3</td><td class="v">1 / 2 / 3</td><td class="v">CLIN+ / CLIN– / GND</td><td>terminais de injeção do EMG clínico</td></tr>
+        <tr><td>J3</td><td class="v">1 / 2 / 3</td><td class="v">CLIN+ / CLIN– / CLIN_REF</td><td>terminais de injeção do EMG clínico. O pino 3 é a referência dele, e passa por <code>R10</code>/<code>JP3</code></td></tr>
         <tr><td>J4</td><td class="v">1 / 2</td><td class="v">ADC_IN / VCC_SEMG</td><td>placa sEMG — pad do <code>R20</code> levantado, e o trilho de 3,3 V. <strong>Só no ensaio 2</strong></td></tr>
-        <tr><td>TP1</td><td class="v">—</td><td class="v">BUF_OUT</td><td>canal 2 do osciloscópio (monitor do sinal injetado)</td></tr>
+        <tr><td><strong>TP3</strong></td><td class="v">—</td><td class="v"><strong>TAP</strong></td><td><strong>o nó de injeção</strong> — 5,59 mV pp <strong>centrados em zero</strong>. É aqui que vai a ponta, em 1× e acoplamento DC</td></tr>
+        <tr><td>TP1</td><td class="v">—</td><td class="v">BUF_OUT</td><td>saída do buffer, com o DC de 1,65 V. Para conferir ceifamento do LM358 e a amplitude absoluta</td></tr>
         <tr><td>TP2</td><td class="v">—</td><td class="v">GND</td><td>terra da ponta do osciloscópio</td></tr>
       </tbody>
     </table>
@@ -431,7 +573,40 @@ NET  U1B_FB      U1-6 · U1-7</pre>
 </section>
 
 <section id="layout">
-  <h2 class="sec"><i>5</i>Notas de layout e verificação</h2>
+  <h2 class="sec"><i>5</i>Ligar no EMG clínico</h2>
+  <p class="dek">O que o clínico recebe, e as quatro coisas a conferir na primeira vez.</p>
+
+  <p>Nos terminais dele chega:</p>
+  <div class="tw">
+    <table>
+      <thead><tr><th>Grandeza</th><th class="n">Valor</th></tr></thead>
+      <tbody>
+        <tr><td>Sinal diferencial AC</td><td class="n">5,59 mV pp</td></tr>
+        <tr><td><strong>Offset diferencial DC</strong></td><td class="n"><strong>zero</strong></td></tr>
+        <tr><td>Potencial de modo comum</td><td class="n">o que o próprio clínico definir</td></tr>
+        <tr><td>Impedância de fonte por perna</td><td class="n">200 Ω (10 kΩ com JP1/JP2 abertos)</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p>O offset diferencial é <strong>zero por construção</strong>, porque <code>C4</code> e <code>C5</code> bloqueiam DC nas duas pernas e a polarização interna dele põe as duas entradas no mesmo potencial. O resíduo é a fuga dos capacitores de filme (~165 pA a 1,65 V) sobre a rede de polarização — da ordem de 1,65 mV. <strong>Eletrodos reais de Ag/AgCl dão 10 a 100 mV de offset de meia-célula</strong>, então esta injeção é uma ordem de grandeza mais limpa que a condição real.</p>
+
+  <h3>As quatro conferências da primeira ligação</h3>
+  <ol>
+    <li><strong>Ele polariza as entradas?</strong> Com tudo ligado, meça o DC em <code>CLIN+</code> e <code>CLIN&minus;</code> contra a referência dele: tem de dar um valor estável e sensato, não encostado num trilho. <em>Se derivar ou saturar,</em> as entradas dele são de alta impedância sem caminho de polarização, e vai ser preciso acrescentar dois resistores de 1 MΩ da nossa parte.</li>
+    <li><strong>O ganho dele.</strong> 5,59 mV pp com ganho 1000 dá 2,8 V de pico na saída; com 2000 dá 5,6 V e pode ceifar. Ajuste <em>antes</em> de gravar.</li>
+    <li><strong>Ele já tem capacitores de entrada?</strong> Se tiver (passa-alta típico em 10–20 Hz), os nossos ficam em série: dois de 1 µF viram 0,5 µF e o polo vai de 1,59 para ~3,2 Hz. Irrelevante em 20 Hz, mas é um motivo a mais para não descer de 1 µF.</li>
+    <li><strong>A referência é ativa?</strong> Se ele usar referência dirigida (DRL, que injeta contra-sinal para cancelar modo comum), esse amplificador estaria dirigindo contra o nosso terra, que é quase 0 Ω — com eletrodo real ele dirige contra o corpo, que são alguns kΩ. Um DRL dirigindo um curto pode entrar em limite de corrente ou oscilar.</li>
+  </ol>
+
+  <div class="call">
+    <span class="lab">Por isso existem o R10 e o JP3</span>
+    <p><code>R10</code> (10 kΩ) fica em série com a referência do clínico, com <code>JP3</code> em paralelo. <strong>Jumper fechado é o padrão</strong> — referência direta no nosso terra. Se o clínico se comportar mal, abre o jumper e os 10 kΩ passam a emular a impedância do corpo, que é até mais realista.</p>
+    <p>É um resistor e um jumper, e é a única coisa deste circuito que depende de um equipamento que ainda não foi identificado. Barato de prevenir agora, impossível de consertar no laboratório sem ferro de solda.</p>
+  </div>
+</section>
+
+<section id="layout">
+  <h2 class="sec"><i>6</i>Notas de layout e verificação</h2>
 
   <h3>Layout</h3>
   <ul>
@@ -446,7 +621,7 @@ NET  U1B_FB      U1-6 · U1-7</pre>
   <h3>Verificação, depois de montar</h3>
   <ol>
     <li><strong>Sem alimentação:</strong> meça <code>R2</code> entre <code>TP1</code> e <code>TAP</code> (100 kΩ) e <code>R3</code> entre <code>TAP</code> e GND (200 Ω). Anote os dois valores — eles <em>são</em> a calibração do circuito.</li>
-    <li><strong>Com 5 V, sem sinal:</strong> <code>TP1</code> deve ficar no meio de escala do DAC, ~1,65 V.</li>
+    <li><strong>Com 5 V, sem sinal:</strong> <code>TP1</code> deve ficar no meio de escala do DAC, ~1,65 V, e o <code>TP3</code>/<code>TAP</code> deve ficar em <strong>0 V</strong> — essa é a prova de que o <code>C6</code> está bloqueando DC.</li>
     <li><strong>Com sinal:</strong> senoide de 100 Hz, amplitude ajustada até <code>TP1</code> marcar <strong>±1,400 V</strong> no osciloscópio. Se o LM358 achatar antes disso, baixe para ±1,200 V e registre.</li>
     <li><strong>Com <code>J4</code> ligado:</strong> o DC em <code>J4-1</code> deve dar 1,65 V no multímetro, <em>antes</em> de tocar na placa sEMG.</li>
   </ol>
