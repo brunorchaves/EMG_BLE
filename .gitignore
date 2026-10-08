@@ -32,3 +32,4 @@ power_profiling/runs/**/export/*_full_uA.npy
 stm32_dac_player/build/
 stm32_dac_player/dist/
 data/uci_emg_physical_action/
+stm32_dac_player/entrega/
