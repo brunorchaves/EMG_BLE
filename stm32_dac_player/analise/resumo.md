@@ -14,12 +14,20 @@
 - medido em 3 captura(s) com dois marcadores: **7.5000 s** (desvio 0.0000 s), nominal 7.500 s
 
 
-## Nivel nos terminais (ganho do clinico = 150x)
+## Ganho do clinico, inferido dos dados
 
-- mediana **20.89 mV pp**, faixa 0.80 a 68.07
+- atenuacao informada: 1:213.8
+- razao mediana entre os canais (n=32): 1.4372
+- **ganho implicito 307x**
+- serve de conferencia contra o ajuste do aparelho: se nao casar com nenhum valor da tabela de ganhos, ou a atenuacao ou o ajuste esta diferente do anotado
+
+
+## Nivel nos terminais (ganho do clinico = 300x)
+
+- mediana **10.44 mV pp**, faixa 0.40 a 34.04
 - projeto do atenuador 1:501 (CIRCUITO_CONDICIONAMENTO): **5,59 mV pp**
 - faixa fisiologica de sEMG citada no artigo: pp abaixo de 6 mV
-- razao medido/projeto: **3.74x**
+- razao medido/projeto: **1.87x**
 
 ## Problemas por captura
 

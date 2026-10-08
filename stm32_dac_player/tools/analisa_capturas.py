@@ -190,6 +190,10 @@ def main() -> None:
     ap.add_argument("--padrao", default="*.csv")
     ap.add_argument("--ganho-clinico", type=float, default=None, metavar="G",
                     help="ganho do EMG clinico; converte o canal dele para mV nos terminais")
+    ap.add_argument("--atenuacao", type=float, default=None, metavar="N",
+                    help="atenuacao do divisor entre o DAC e os terminais (ex.: 213.8 para "
+                         "100k/470R). Com ela o resumo infere o ganho do clinico pela razao "
+                         "entre os dois canais, que serve de conferencia independente.")
     args = ap.parse_args()
 
     meta = load_meta()
@@ -283,6 +287,19 @@ def main() -> None:
     md.append(f"- medido em {len(per)} captura(s) com dois marcadores: "
               f"**{np.mean(per):.4f} s** (desvio {np.std(per):.4f} s), nominal {LOOP_S:.3f} s\n"
               if per else "- nenhuma captura contem dois marcadores\n")
+
+    if args.atenuacao:
+        rz = [r["outro_pp_V"] / r["estimulo_pp_V"] for r in ok
+              if r.get("estimulo_pp_V") and r.get("outro_pp_V") and r.get("canal_estimulo", "").startswith("ch")]
+        if rz:
+            g = np.median(rz) * args.atenuacao
+            md += ["\n## Ganho do clinico, inferido dos dados\n",
+                   f"- atenuacao informada: 1:{args.atenuacao:.1f}",
+                   f"- razao mediana entre os canais (n={len(rz)}): {np.median(rz):.4f}",
+                   f"- **ganho implicito {g:.0f}x**",
+                   "- serve de conferencia contra o ajuste do aparelho: se nao casar com nenhum "
+                   "valor da tabela de ganhos, ou a atenuacao ou o ajuste esta diferente do "
+                   "anotado\n"]
 
     pps = [r["outro_pp_mV_terminais"] for r in ok if "outro_pp_mV_terminais" in r]
     if pps:
